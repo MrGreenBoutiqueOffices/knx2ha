@@ -51,12 +51,17 @@ function downloadText(filename: string, text: string) {
 }
 
 export default function KnxUpload() {
-  const { parse, busy, progress, error: workerError } = useKnxWorker();
+  const {
+    parse,
+    busy,
+    progress,
+    progressInfo,
+    error: workerError,
+  } = useKnxWorker(4);
 
   const [file, setFile] = useState<File | null>(null);
   const [catalog, setCatalog] = useState<KnxCatalog | null>(null);
 
-  // optie
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -248,11 +253,39 @@ export default function KnxUpload() {
             </div>
 
             {busy && (
-              <div className="flex items-center gap-3">
-                <Progress value={progress} className="h-2 w-full" />
-                <span className="text-xs text-muted-foreground">
-                  {progress ? `${progress}%` : "…"}
-                </span>
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <Progress value={progress} className="h-2 w-full" />
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {Math.round(progress)}%
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {progressInfo?.phase === "extract_xml" &&
+                  progressInfo.filename ? (
+                    <>
+                      Lezen:{" "}
+                      <code>{progressInfo.filename.split("/").pop()}</code> (
+                      {(progressInfo.filePercent ?? 0).toFixed(0)}%) —{" "}
+                      {progressInfo.processedFiles ?? 0}/
+                      {progressInfo.totalFiles ?? 0}
+                    </>
+                  ) : progressInfo?.phase === "parse_xml" &&
+                    progressInfo.filename ? (
+                    <>
+                      Parsen:{" "}
+                      <code>{progressInfo.filename.split("/").pop()}</code> —{" "}
+                      {progressInfo.processedFiles ?? 0}/
+                      {progressInfo.totalFiles ?? 0}
+                    </>
+                  ) : progressInfo?.phase === "scan_entries" ? (
+                    <>Bestanden inventariseren…</>
+                  ) : progressInfo?.phase === "build_catalog" ? (
+                    <>Catalog samenstellen…</>
+                  ) : (
+                    <>Bezig…</>
+                  )}
+                </div>
               </div>
             )}
 

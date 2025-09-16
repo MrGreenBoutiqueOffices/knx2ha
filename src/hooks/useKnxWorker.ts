@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KnxCatalog } from "@/lib/knx/types";
+import type { ParseProgress } from "@/lib/knx/parse";
 
 type WorkerRes =
-  | { t: "progress"; value: number }
+  | { t: "progress"; p: ParseProgress }
   | { t: "result"; catalog: KnxCatalog }
   | { t: "error"; message: string };
 
-export function useKnxWorker() {
+export function useKnxWorker(concurrency = 4) {
   const workerRef = useRef<Worker | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressInfo, setProgressInfo] = useState<ParseProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,38 +28,42 @@ export function useKnxWorker() {
     };
   }, []);
 
-  const parse = useCallback((file: File) => {
-    return new Promise<KnxCatalog>((resolve, reject) => {
-      const w = workerRef.current;
-      if (!w) {
-        reject(new Error("Worker not ready"));
-        return;
-      }
-      setBusy(true);
-      setError(null);
-      setProgress(0);
-
-      const onMessage = (e: MessageEvent<WorkerRes>) => {
-        const data = e.data;
-        if (data.t === "progress") setProgress(data.value);
-        if (data.t === "result") {
-          setProgress(100);
-          setBusy(false);
-          w.removeEventListener("message", onMessage);
-          resolve(data.catalog);
+  const parse = useCallback(
+    (file: File) => {
+      return new Promise<KnxCatalog>((resolve, reject) => {
+        const w = workerRef.current;
+        if (!w) {
+          reject(new Error("Worker not ready"));
+          return;
         }
-        if (data.t === "error") {
-          setBusy(false);
-          setError(data.message);
-          w.removeEventListener("message", onMessage);
-          reject(new Error(data.message));
-        }
-      };
+        setBusy(true);
+        setError(null);
+        setProgress(0);
+        setProgressInfo(null);
 
-      w.addEventListener("message", onMessage);
-      w.postMessage({ t: "parse", file });
-    });
-  }, []);
+        const onMessage = (e: MessageEvent<WorkerRes>) => {
+          const data = e.data;
+          if (data.t === "progress") {
+            setProgress(data.p.percent);
+            setProgressInfo(data.p);
+          } else if (data.t === "result") {
+            setBusy(false);
+            w.removeEventListener("message", onMessage);
+            resolve(data.catalog);
+          } else if (data.t === "error") {
+            setBusy(false);
+            setError(data.message);
+            w.removeEventListener("message", onMessage);
+            reject(new Error(data.message));
+          }
+        };
 
-  return { parse, busy, progress, error };
+        w.addEventListener("message", onMessage);
+        w.postMessage({ t: "parse", file, concurrency });
+      });
+    },
+    [concurrency]
+  );
+
+  return { parse, busy, progress, progressInfo, error };
 }
