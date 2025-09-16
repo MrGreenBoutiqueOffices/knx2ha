@@ -57,9 +57,7 @@ export default function KnxUpload() {
   const [error, setError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<KnxCatalog | null>(null);
 
-  // options
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
-  const [debug, setDebug] = useState(false);
 
   const [isDragging, setIsDragging] = useState(false);
   const dropRef = useRef<HTMLDivElement | null>(null);
@@ -81,11 +79,10 @@ export default function KnxUpload() {
     setProgress(12);
 
     try {
-      const cat = await parseKnxproj(file, { debug });
+      const cat = await parseKnxproj(file);
       setProgress(88);
       setCatalog(cat);
       setProgress(100);
-
       toast.success("Gereed", {
         description: `${cat.group_addresses.length} group addresses gevonden.`,
       });
@@ -180,7 +177,7 @@ export default function KnxUpload() {
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             {/* dropzone */}
             <div
               ref={dropRef}
@@ -205,7 +202,7 @@ export default function KnxUpload() {
                   Ondersteund: <code>.knxproj</code> (ZIP met XML)
                 </div>
               </div>
-              {/* invisible input that still allows click */}
+              {/* clickable overlay */}
               <Input
                 type="file"
                 accept=".knxproj,application/zip"
@@ -215,10 +212,11 @@ export default function KnxUpload() {
               />
             </div>
 
-            {/* options */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:items-center">
-              <div className="space-y-1">
-                <Label className="text-sm text-muted-foreground">
+            {/* options row */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              {/* selected file */}
+              <div className="min-w-0">
+                <Label className="mb-1 block text-xs text-muted-foreground">
                   Geselecteerd bestand
                 </Label>
                 <div className="truncate text-sm">
@@ -234,31 +232,25 @@ export default function KnxUpload() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
+              {/* single option — aligned baseline */}
+              <div className="inline-flex h-9 items-center gap-3">
+                <div className="inline-flex items-center gap-2">
                   <Switch
                     id="opt-reserve"
                     checked={dropReserveFromUnknown}
                     onCheckedChange={setDropReserveFromUnknown}
                     disabled={busy}
                   />
-                  <Label htmlFor="opt-reserve" className="text-sm">
+                  <Label
+                    htmlFor="opt-reserve"
+                    className="cursor-pointer text-sm leading-none"
+                  >
                     Filter <code>Reserve</code> uit <code>_unknown</code>
-                  </Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="opt-debug"
-                    checked={debug}
-                    onCheckedChange={setDebug}
-                    disabled={busy}
-                  />
-                  <Label htmlFor="opt-debug" className="text-sm">
-                    Debug console
                   </Label>
                 </div>
               </div>
 
+              {/* actions */}
               <div className="flex gap-2 md:justify-end">
                 <Button onClick={handleParse} disabled={!file || busy}>
                   {busy ? "Bezig…" : "Parsen"}
@@ -365,11 +357,9 @@ export default function KnxUpload() {
   );
 }
 
-/** small inline code panel with copy button */
 function CodePanel({
   value,
   onCopy,
-  ariaLabel,
 }: {
   value: string;
   onCopy: () => Promise<boolean>;
