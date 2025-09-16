@@ -1,7 +1,17 @@
 import YAML from "yaml";
-import { ExportOptions, KnxCatalog } from "./types";
+import {
+  ExportOptions,
+  KnxCatalog,
+  HaSwitch,
+  HaBinarySensor,
+  HaLight,
+  HaSensor,
+  HaCover,
+  UnknownEntity,
+} from "./types";
 import {
   buildLaLightAggregates,
+  buildSwitchAggregates,
   collectConsumedIds,
   mapSingleGaToEntity,
 } from "./aggregate";
@@ -24,42 +34,64 @@ export function toHomeAssistantYaml(
   catalog: KnxCatalog,
   opts: ExportOptions = {}
 ): string {
-  const switches: Array<Record<string, unknown>> = [];
-  const binarySensors: Array<Record<string, unknown>> = [];
-  const lights: Array<Record<string, unknown>> = [];
-  const sensors: Array<Record<string, unknown>> = [];
-  const covers: Array<Record<string, unknown>> = [];
-  const unknowns: Array<Record<string, unknown>> = [];
+  const switches: HaSwitch[] = [];
+  const binarySensors: HaBinarySensor[] = [];
+  const lights: HaLight[] = [];
+  const sensors: HaSensor[] = [];
+  const covers: HaCover[] = [];
+  const unknowns: UnknownEntity[] = [];
 
-  // 1) LA-aggregatie
   const laAggs = buildLaLightAggregates(catalog.group_addresses);
-  const consumed = collectConsumedIds(laAggs);
-
   for (const a of laAggs) {
-    const entry: Record<string, unknown> = { name: a.name };
-    if (a.on_off) entry["address"] = a.on_off;
-    if (a.on_off_state) entry["state_address"] = a.on_off_state;
-    if (a.brightness) entry["brightness_address"] = a.brightness;
-    if (a.brightness_state)
-      entry["brightness_state_address"] = a.brightness_state;
+    if (!a.on_off) continue;
+
+    const entry: HaLight = { name: a.name, address: a.on_off };
+    if (a.on_off_state) entry.state_address = a.on_off_state;
+    if (a.brightness) entry.brightness_address = a.brightness;
+    if (a.brightness_state) entry.brightness_state_address = a.brightness_state;
     lights.push(entry);
   }
 
-  // 2) Rest mappen met heuristiek
-  for (const ga of catalog.group_addresses) {
-    if (consumed.has(ga.id)) continue;
-    const { domain, payload } = mapSingleGaToEntity(ga);
-    if (domain === "switch") switches.push(payload);
-    else if (domain === "binary_sensor") binarySensors.push(payload);
-    else if (domain === "light") lights.push(payload);
-    else if (domain === "sensor") sensors.push(payload);
-    else if (domain === "cover") covers.push(payload);
-    else unknowns.push(payload);
+  const switchAggs = buildSwitchAggregates(catalog.group_addresses);
+  for (const s of switchAggs) {
+    const entry: HaSwitch = { name: s.name, address: s.address! };
+    if (s.state_address) entry.state_address = s.state_address;
+    else {
+      entry.respond_to_read = true;
+    }
+    switches.push(entry);
   }
 
-  // 3) Unknowns opschonen (optioneel): verwijder items met name === "Reserve"
+  const consumed = collectConsumedIds(laAggs, switchAggs);
+  for (const ga of catalog.group_addresses) {
+    if (consumed.has(ga.id)) continue;
+
+    const mapped = mapSingleGaToEntity(ga);
+
+    switch (mapped.domain) {
+      case "switch":
+        switches.push(mapped.payload);
+        break;
+      case "binary_sensor":
+        binarySensors.push(mapped.payload);
+        break;
+      case "light":
+        lights.push(mapped.payload);
+        break;
+      case "sensor":
+        sensors.push(mapped.payload);
+        break;
+      case "cover":
+        covers.push(mapped.payload);
+        break;
+      case "_unknown":
+        unknowns.push(mapped.payload);
+        break;
+    }
+  }
+
   const finalUnknowns = opts.dropReserveFromUnknown
-    ? unknowns.filter((x) => String(x.name).trim().toLowerCase() !== "reserve")
+    ? unknowns.filter((x) => x.name.trim().toLowerCase() !== "reserve")
     : unknowns;
 
   const knx: Record<string, unknown> = {};
