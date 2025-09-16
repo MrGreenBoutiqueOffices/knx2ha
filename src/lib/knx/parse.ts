@@ -13,6 +13,23 @@ import {
   decodeGaIntToTriple,
 } from "./utils";
 
+export type ParsePhase =
+  | "load_zip"
+  | "scan_entries"
+  | "extract_xml"
+  | "parse_xml"
+  | "build_catalog"
+  | "done";
+
+export interface ParseProgress {
+  phase: ParsePhase;
+  percent: number;
+  totalFiles?: number;
+  processedFiles?: number;
+  filename?: string;
+  filePercent?: number;
+}
+
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "",
@@ -21,7 +38,6 @@ const parser = new XMLParser({
 function normalizeAddress(gaNode: unknown): string | undefined {
   if (!isObject(gaNode)) return undefined;
 
-  // 1) Direct Address
   const addrRaw =
     gaNode["Address"] ?? gaNode["address"] ?? gaNode["Addr"] ?? gaNode["addr"];
   const addrStr = toStringIfScalar(addrRaw);
@@ -31,7 +47,6 @@ function normalizeAddress(gaNode: unknown): string | undefined {
     if (/^\d+$/.test(s)) return decodeGaIntToTriple(parseInt(s, 10));
   }
 
-  // 2) Split fields -> main/middle/sub
   const main = toStringIfScalar(
     gaNode["MainGroup"] ??
       gaNode["mainGroup"] ??
@@ -56,7 +71,6 @@ function normalizeAddress(gaNode: unknown): string | undefined {
       gaNode["Sub Address"] ??
       gaNode["SubAddress"]
   );
-
   if (main && middle && sub) return `${main}/${middle}/${sub}`;
   return undefined;
 }
@@ -172,36 +186,112 @@ function collectGroupAddresses(json: unknown, out: GroupAddress[]): void {
   }
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, idx: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+
+  async function worker() {
+    while (true) {
+      const current = next++;
+      if (current >= items.length) break;
+      results[current] = await fn(items[current], current);
+    }
+  }
+
+  const runners = Array.from({ length: Math.min(limit, items.length) }, () =>
+    worker()
+  );
+  await Promise.all(runners);
+  return results;
+}
+
 export async function parseKnxproj(
   file: File,
-  opts?: { debug?: boolean }
+  opts?: {
+    debug?: boolean;
+    onProgress?: (p: ParseProgress) => void;
+    concurrency?: number;
+  }
 ): Promise<KnxCatalog> {
+  const onProgress = opts?.onProgress ?? (() => {});
+  const concurrency = Math.max(1, Math.min(8, opts?.concurrency ?? 4));
+
+  onProgress({ phase: "load_zip", percent: 2 });
+
   const zip = await JSZip.loadAsync(file);
+  onProgress({ phase: "scan_entries", percent: 5 });
+
   const xmlNames = Object.keys(zip.files).filter((n) =>
     n.toLowerCase().endsWith(".xml")
   );
-
-  if (opts?.debug) console.log("[knx] XML files:", xmlNames);
+  const totalFiles = xmlNames.length;
+  onProgress({ phase: "scan_entries", percent: 8, totalFiles });
 
   let projectName: string | undefined;
   const gathered: GroupAddress[] = [];
 
-  for (const name of xmlNames) {
-    const text = await zip.files[name].async("string");
+  const baseStart = 10;
+  const baseEnd = 95;
+  let processedFiles = 0;
+
+  function updateOverall(fileIndex: number, filePercent: number) {
+    const perFileSpan = (baseEnd - baseStart) / Math.max(1, totalFiles);
+    const percent = baseStart + perFileSpan * (fileIndex + filePercent / 100);
+    return Math.max(10, Math.min(95, percent));
+  }
+
+  await mapWithConcurrency(xmlNames, concurrency, async (name, idx) => {
+    const text = await zip.files[name].async("string", (meta) => {
+      const p = updateOverall(idx, meta.percent ?? 0);
+      onProgress({
+        phase: "extract_xml",
+        percent: p,
+        filename: name,
+        totalFiles,
+        processedFiles,
+        filePercent: meta.percent ?? 0,
+      });
+    });
+
+    onProgress({
+      phase: "parse_xml",
+      percent: updateOverall(idx, 100),
+      filename: name,
+      totalFiles,
+      processedFiles,
+      filePercent: 100,
+    });
+
     let json: unknown;
     try {
       json = parser.parse(text);
     } catch {
-      continue;
+      processedFiles++;
+      return;
     }
+
     if (projectName === undefined) {
       const pName = findProjectName(json);
       if (pName) projectName = pName;
     }
-    collectGroupAddresses(json, gathered);
-  }
 
-  // Fallback: gebruik bestandsnaam (zonder extensie)
+    collectGroupAddresses(json, gathered);
+    processedFiles++;
+
+    onProgress({
+      phase: "parse_xml",
+      percent: updateOverall(idx, 100),
+      filename: name,
+      totalFiles,
+      processedFiles,
+      filePercent: 100,
+    });
+  });
+
   if (!projectName) {
     const entry = Object.keys(zip.files).find((n) =>
       n.toLowerCase().endsWith(".knxproj")
@@ -210,7 +300,13 @@ export async function parseKnxproj(
     projectName = topName?.replace(/\.knxproj$/i, "") || "Onbekend";
   }
 
-  // Dedup op (address + name)
+  onProgress({
+    phase: "build_catalog",
+    percent: 96,
+    totalFiles,
+    processedFiles,
+  });
+
   const map = new Map<string, GroupAddress>();
   for (const ga of gathered) map.set(`${ga.address}@@${ga.name}`, ga);
 
@@ -218,8 +314,7 @@ export async function parseKnxproj(
     a.address.localeCompare(b.address, undefined, { numeric: true })
   );
 
-  if (opts?.debug)
-    console.log(`[knx] Found ${list.length} GAs. Project: ${projectName}`);
+  onProgress({ phase: "done", percent: 100, totalFiles, processedFiles });
 
   return { project_name: projectName ?? null, group_addresses: list };
 }
