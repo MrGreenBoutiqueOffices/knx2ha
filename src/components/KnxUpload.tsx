@@ -2,8 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { KnxCatalog } from "@/lib/knx/types";
-import { parseKnxproj } from "@/lib/knx/parse";
 import { toCatalogYaml, toHomeAssistantYaml } from "@/lib/knx/export";
+import { useKnxWorker } from "@/hooks/useKnxWorker";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -51,12 +51,12 @@ function downloadText(filename: string, text: string) {
 }
 
 export default function KnxUpload() {
+  const { parse, busy, progress, error: workerError } = useKnxWorker();
+
   const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<KnxCatalog | null>(null);
 
+  // optie
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -74,35 +74,22 @@ export default function KnxUpload() {
 
   async function handleParse() {
     if (!file) return;
-    setBusy(true);
-    setError(null);
-    setProgress(12);
-
     try {
-      const cat = await parseKnxproj(file);
-      setProgress(88);
+      const cat = await parse(file);
       setCatalog(cat);
-      setProgress(100);
       toast.success("Gereed", {
         description: `${cat.group_addresses.length} group addresses gevonden.`,
       });
-    } catch (e: unknown) {
-      console.error(e);
+    } catch (e) {
       const msg =
         e instanceof Error ? e.message : "Kon het bestand niet parsen.";
-      setError(msg);
       toast.error("Fout bij parsen", { description: msg });
-    } finally {
-      setTimeout(() => setBusy(false), 250);
-      setTimeout(() => setProgress(0), 600);
     }
   }
 
   function handleReset() {
     setFile(null);
     setCatalog(null);
-    setError(null);
-    setProgress(0);
   }
 
   function onDrop(e: React.DragEvent) {
@@ -111,12 +98,10 @@ export default function KnxUpload() {
     const f = e.dataTransfer.files?.[0];
     if (f) setFile(f);
   }
-
   function onDragOver(e: React.DragEvent) {
     e.preventDefault();
     if (!isDragging) setIsDragging(true);
   }
-
   function onDragLeave(e: React.DragEvent) {
     if (e.currentTarget === dropRef.current) setIsDragging(false);
   }
@@ -202,7 +187,6 @@ export default function KnxUpload() {
                   Ondersteund: <code>.knxproj</code> (ZIP met XML)
                 </div>
               </div>
-              {/* clickable overlay */}
               <Input
                 type="file"
                 accept=".knxproj,application/zip"
@@ -214,7 +198,6 @@ export default function KnxUpload() {
 
             {/* options row */}
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              {/* selected file */}
               <div className="min-w-0">
                 <Label className="mb-1 block text-xs text-muted-foreground">
                   Geselecteerd bestand
@@ -232,7 +215,6 @@ export default function KnxUpload() {
                 </div>
               </div>
 
-              {/* single option — aligned baseline */}
               <div className="inline-flex h-9 items-center gap-3">
                 <div className="inline-flex items-center gap-2">
                   <Switch
@@ -250,7 +232,6 @@ export default function KnxUpload() {
                 </div>
               </div>
 
-              {/* actions */}
               <div className="flex gap-2 md:justify-end">
                 <Button onClick={handleParse} disabled={!file || busy}>
                   {busy ? "Bezig…" : "Parsen"}
@@ -275,10 +256,10 @@ export default function KnxUpload() {
               </div>
             )}
 
-            {error && (
+            {workerError && (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                 <Bug className="mr-2 inline h-4 w-4" />
-                {error}
+                {workerError}
               </div>
             )}
           </CardContent>
