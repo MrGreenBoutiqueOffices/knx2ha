@@ -12,6 +12,7 @@ import {
 import { isLA, guessEntityType } from "./heuristics";
 import { parseAddress } from "./utils";
 
+/** ----------------- LIGHT AGGREGATIE (on/off + dim) ----------------- */
 export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   const byBase = new Map<string, LightAggregate>();
 
@@ -47,6 +48,7 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   );
 }
 
+/** ----------------- SWITCH AGGREGATIE (DPST-1-1) ----------------- */
 function isStatusName(name: string): boolean {
   return /\bstatus\b/i.test(name);
 }
@@ -97,21 +99,135 @@ export function collectConsumedIds(
   ...aggs: Array<{ consumedIds: Set<string> }[]>
 ): Set<string> {
   const consumed = new Set<string>();
-  for (const group of aggs) {
+  for (const group of aggs)
     for (const a of group) a.consumedIds.forEach((id) => consumed.add(id));
-  }
   return consumed;
 }
 
-function dptToSensorType(dpt?: string, name?: string): string | undefined {
-  const d = (dpt ?? "").toLowerCase();
-  if (d === "dpst-5-1" || d === "5.001") return "percent";
-  if (d === "dpst-9-1" || d === "9.001") return "temperature";
-  if (/(temperatuur|temperature|temp)/i.test(name ?? "") && d.startsWith("9."))
-    return "temperature";
+/** ----------------- SENSOR TYPE-MAPPING (HA value types) ----------------- */
+function normalizeDptToDot(dpt?: string): string | undefined {
+  if (!dpt) return undefined;
+  let s = dpt.trim().toLowerCase();
+  s = s.replace(/^dpst?-/, "");
+  s = s.replace(/_/g, "-");
+  s = s.replace(/\s+/g, "");
+  if (s.includes(".")) {
+    const [m, sub] = s.split(".", 2);
+    const mm = String(parseInt(m, 10));
+    const ss = sub ? sub.replace(/^0+/, "") : "";
+    return ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
+  }
+  if (s.includes("-")) {
+    const [m, sub] = s.split("-", 2);
+    const mm = String(parseInt(m, 10));
+    const ss = sub ? sub.replace(/^0+/, "") : "";
+    return ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
+  }
+  if (/^\d+$/.test(s)) return String(parseInt(s, 10));
   return undefined;
 }
 
+const DPT_TO_HA: Record<string, string> = {
+  // 5.*
+  "5": "1byte_unsigned",
+  "5.001": "percent",
+  "5.003": "angle",
+  "5.004": "percentU8",
+  "5.005": "decimal_factor",
+  "5.006": "tariff",
+  "5.010": "pulse",
+  // 6.*
+  "6": "1byte_signed",
+  "6.001": "percentV8",
+  "6.010": "counter_pulses",
+  // 7.*
+  "7": "2byte_unsigned",
+  "7.001": "pulse_2byte",
+  "7.002": "time_period_msec",
+  "7.003": "time_period_10msec",
+  "7.004": "time_period_100msec",
+  "7.005": "time_period_sec",
+  "7.006": "time_period_min",
+  "7.007": "time_period_hrs",
+  "7.011": "length_mm",
+  "7.012": "current",
+  "7.013": "brightness",
+  "7.600": "color_temperature",
+  // 8.*
+  "8": "2byte_signed",
+  "8.001": "pulse_2byte_signed",
+  "8.002": "delta_time_ms",
+  "8.003": "delta_time_10ms",
+  "8.004": "delta_time_100ms",
+  "8.005": "delta_time_sec",
+  "8.006": "delta_time_min",
+  "8.007": "delta_time_hrs",
+  "8.010": "percentV16",
+  "8.011": "rotation_angle",
+  "8.012": "length_m",
+  // 9.*
+  "9": "2byte_float",
+  "9.001": "temperature",
+  "9.002": "temperature_difference_2byte",
+  "9.003": "temperature_a",
+  "9.004": "illuminance",
+  "9.005": "wind_speed_ms",
+  "9.006": "pressure_2byte",
+  "9.007": "humidity",
+  "9.008": "ppm",
+  "9.009": "air_flow",
+  "9.010": "time_1",
+  "9.011": "time_2",
+  "9.020": "voltage",
+  "9.021": "curr",
+  "9.022": "power_density",
+  "9.023": "kelvin_per_percent",
+  "9.024": "power_2byte",
+  "9.025": "volume_flow",
+  "9.026": "rain_amount",
+  "9.027": "temperature_f",
+  "9.028": "wind_speed_kmh",
+  "9.029": "absolute_humidity",
+  "9.030": "concentration_ugm3",
+  // 12.*
+  "12": "4byte_unsigned",
+  "12.001": "pulse_4_ucount",
+  "12.100": "long_time_period_sec",
+  "12.101": "long_time_period_min",
+};
+
+function fallbackTypeFromName(name?: string): string | undefined {
+  if (!name) return undefined;
+  const n = name.toLowerCase();
+  if (/(temp|temperatuur)/.test(n)) return "temperature";
+  if (/(hum|humidity|rv)/.test(n)) return "humidity";
+  if (/(lux|illuminance|lichtsterkte)/.test(n)) return "illuminance";
+  if (/\bppm\b|co2/.test(n)) return "ppm";
+  if (/(volt|spanning|voltage)/.test(n)) return "voltage";
+  if (/(amp|stroom|current|mA|A\b)/.test(n)) return "curr";
+  if (/(power|vermogen|watt|kw\b)/.test(n)) return "power_2byte";
+  if (/(press|druk)/.test(n)) return "pressure_2byte";
+  if (/(wind).*(km\/?h)/.test(n)) return "wind_speed_kmh";
+  if (/(wind|windsnelheid)/.test(n)) return "wind_speed_ms";
+  if (/(rain|regen)/.test(n)) return "rain_amount";
+  if (/(flow|debiet)/.test(n)) return "volume_flow";
+  return undefined;
+}
+
+function dptToSensorType(dpt?: string, name?: string): string | undefined {
+  const norm = normalizeDptToDot(dpt);
+  if (norm && DPT_TO_HA[norm]) return DPT_TO_HA[norm];
+
+  if (norm === "5") return DPT_TO_HA["5"];
+  if (norm === "6") return DPT_TO_HA["6"];
+  if (norm === "7") return DPT_TO_HA["7"];
+  if (norm === "8") return DPT_TO_HA["8"];
+  if (norm === "9") return DPT_TO_HA["9"];
+  if (norm === "12") return DPT_TO_HA["12"];
+  return fallbackTypeFromName(name);
+}
+
+/** ----------------- Fallback mapping voor losse GA's ----------------- */
 export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   const t = guessEntityType(ga.dpt, ga.name);
 
@@ -134,11 +250,10 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
       return { domain: "light", payload };
     }
     if (/^dpst?-5-1$/i.test(ga.dpt ?? "")) {
-      const sensorType = "percent";
       const payload: HaSensor = {
         name: ga.name,
         state_address: ga.address,
-        type: sensorType,
+        type: "percent",
       };
       return { domain: "sensor", payload };
     }
