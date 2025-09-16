@@ -1,8 +1,17 @@
-import { GroupAddress, LightAggregate } from "./types";
+import {
+  GroupAddress,
+  LightAggregate,
+  MappedEntity,
+  HaSwitch,
+  HaBinarySensor,
+  HaLight,
+  HaSensor,
+  HaCover,
+  UnknownEntity,
+} from "./types";
 import { isLA, guessEntityType } from "./heuristics";
 import { parseAddress } from "./utils";
 
-/** Bundelt LA* armaturen tot één light met on/off + brightness + state. */
 export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   const byBase = new Map<string, LightAggregate>();
 
@@ -18,15 +27,15 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
       byBase.set(base, agg);
     }
 
-    const dpt = ga.dpt ?? "";
-    if (/^DPST?-1-1$/i.test(dpt)) {
+    const dpt = (ga.dpt ?? "").toLowerCase();
+    if (/^dpst?-1-1$/.test(dpt)) {
       if (parts.middle === 1) agg.on_off = ga.address;
       if (parts.middle === 5) agg.on_off_state = ga.address;
       agg.consumedIds.add(ga.id);
-    } else if (/^DPST?-3-7$/i.test(dpt)) {
+    } else if (/^dpst?-3-7$/.test(dpt)) {
       if (parts.middle === 2) agg.dimming = ga.address;
       agg.consumedIds.add(ga.id);
-    } else if (/^DPST?-5-1$/i.test(dpt)) {
+    } else if (/^dpst?-5-1$/.test(dpt)) {
       if (parts.middle === 3) agg.brightness = ga.address;
       if (parts.middle === 4) agg.brightness_state = ga.address;
       agg.consumedIds.add(ga.id);
@@ -38,56 +47,130 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   );
 }
 
-/** Handige helper: bepaal of GA al door aggregatie is opgegeten */
-export function collectConsumedIds(aggs: LightAggregate[]): Set<string> {
+function isStatusName(name: string): boolean {
+  return /\bstatus\b/i.test(name);
+}
+function normalizeBaseName(name: string): string {
+  let n = name.toLowerCase().trim();
+  n = n.replace(
+    /\b(status|aan\/?uit|aan|uit|schakel|switch|cmd|command)\b/g,
+    ""
+  );
+  n = n.replace(/\s+/g, " ").trim();
+  return n.length ? n : name.toLowerCase().trim();
+}
+
+export interface SwitchAggregate {
+  name: string;
+  address?: string;
+  state_address?: string;
+  consumedIds: Set<string>;
+}
+
+export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
+  const oneBit = gas.filter((g) => /^dpst?-1-1$/i.test(g.dpt ?? ""));
+  const byBase = new Map<string, SwitchAggregate>();
+
+  for (const ga of oneBit) {
+    const base = normalizeBaseName(ga.name);
+    let agg = byBase.get(base);
+    if (!agg) {
+      agg = { name: ga.name, consumedIds: new Set<string>() };
+      byBase.set(base, agg);
+    }
+
+    if (isStatusName(ga.name)) {
+      if (!agg.state_address) agg.state_address = ga.address;
+      agg.consumedIds.add(ga.id);
+    } else {
+      if (!agg.address) {
+        agg.address = ga.address;
+        agg.name = ga.name;
+      }
+      agg.consumedIds.add(ga.id);
+    }
+  }
+  return Array.from(byBase.values()).filter((a) => !!a.address);
+}
+
+export function collectConsumedIds(
+  ...aggs: Array<{ consumedIds: Set<string> }[]>
+): Set<string> {
   const consumed = new Set<string>();
-  for (const a of aggs) a.consumedIds.forEach((id) => consumed.add(id));
+  for (const group of aggs) {
+    for (const a of group) a.consumedIds.forEach((id) => consumed.add(id));
+  }
   return consumed;
 }
 
-/** Simpele “fallback”-mapping voor losse GA’s die geen LA* zijn. */
-export function mapSingleGaToEntity(ga: GroupAddress): {
-  domain: string;
-  payload: Record<string, unknown>;
-} {
+function dptToSensorType(dpt?: string, name?: string): string | undefined {
+  const d = (dpt ?? "").toLowerCase();
+  if (d === "dpst-5-1" || d === "5.001") return "percent";
+  if (d === "dpst-9-1" || d === "9.001") return "temperature";
+  if (/(temperatuur|temperature|temp)/i.test(name ?? "") && d.startsWith("9."))
+    return "temperature";
+  return undefined;
+}
+
+export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   const t = guessEntityType(ga.dpt, ga.name);
-  switch (t) {
-    case "switch":
-      return {
-        domain: "switch",
-        payload: { name: ga.name, state_address: ga.address },
-      };
-    case "binary_sensor":
-      return {
-        domain: "binary_sensor",
-        payload: { name: ga.name, state_address: ga.address },
-      };
-    case "light":
-      // Als dit een losse brightness GA is (5.001), alleen state meegeven
-      if (/^DPST?-5-1$/i.test(ga.dpt ?? "")) {
-        return {
-          domain: "light",
-          payload: { name: ga.name, brightness_state_address: ga.address },
-        };
-      }
-      return {
-        domain: "light",
-        payload: { name: ga.name, state_address: ga.address },
-      };
-    case "sensor":
-      return {
-        domain: "sensor",
-        payload: { name: ga.name, state_address: ga.address },
-      };
-    case "cover":
-      return {
-        domain: "cover",
-        payload: { name: ga.name, move_long_address: ga.address },
-      };
-    default:
-      return {
-        domain: "_unknown",
-        payload: { name: ga.name, address: ga.address, dpt: ga.dpt },
-      };
+
+  if (t === "switch") {
+    const payload: HaSwitch = { name: ga.name, address: ga.address };
+    return { domain: "switch", payload };
   }
+
+  if (t === "binary_sensor") {
+    const payload: HaBinarySensor = {
+      name: ga.name,
+      state_address: ga.address,
+    };
+    return { domain: "binary_sensor", payload };
+  }
+
+  if (t === "light") {
+    if (/^dpst?-1-1$/i.test(ga.dpt ?? "")) {
+      const payload: HaLight = { name: ga.name, address: ga.address };
+      return { domain: "light", payload };
+    }
+    if (/^dpst?-5-1$/i.test(ga.dpt ?? "")) {
+      const sensorType = "percent";
+      const payload: HaSensor = {
+        name: ga.name,
+        state_address: ga.address,
+        type: sensorType,
+      };
+      return { domain: "sensor", payload };
+    }
+  }
+
+  if (t === "sensor") {
+    const sensorType = dptToSensorType(ga.dpt, ga.name);
+    if (sensorType) {
+      const payload: HaSensor = {
+        name: ga.name,
+        state_address: ga.address,
+        type: sensorType,
+      };
+      return { domain: "sensor", payload };
+    }
+    const unknownPayload: UnknownEntity = {
+      name: ga.name,
+      address: ga.address,
+      dpt: ga.dpt,
+    };
+    return { domain: "_unknown", payload: unknownPayload };
+  }
+
+  if (t === "cover") {
+    const payload: HaCover = { name: ga.name, move_long_address: ga.address };
+    return { domain: "cover", payload };
+  }
+
+  const payload: UnknownEntity = {
+    name: ga.name,
+    address: ga.address,
+    dpt: ga.dpt,
+  };
+  return { domain: "_unknown", payload };
 }
