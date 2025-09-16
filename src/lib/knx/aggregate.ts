@@ -12,7 +12,43 @@ import {
 import { isLA, guessEntityType } from "./heuristics";
 import { parseAddress } from "./utils";
 
-/** ----------------- LIGHT AGGREGATIE (on/off + dim) ----------------- */
+/** ====================== MICRO OPTS / CACHES ====================== */
+const STATUS_RE = /\bstatus\b/i;
+const NAME_STRIP_RE =
+  /\b(status|aan\/?uit|aan|uit|schakel|switch|cmd|command)\b/gi;
+
+const DPT_DOT_CACHE = new Map<string, string | undefined>(); // "DPST-9-1" -> "9.001" etc.
+
+/** Normaliseer naar "main.sub" (bv. "9.001"). Bewaart resultaat in cache. */
+function normalizeDptToDot(dpt?: string): string | undefined {
+  if (!dpt) return undefined;
+  const key = dpt;
+  if (DPT_DOT_CACHE.has(key)) return DPT_DOT_CACHE.get(key);
+
+  let s = dpt.trim().toLowerCase();
+  s = s.replace(/^dpst?-/, ""); // "DPST-9-1" -> "9-1"
+  s = s.replace(/_/g, "-").replace(/\s+/g, "");
+  let out: string | undefined;
+
+  if (s.includes(".")) {
+    const [m, sub] = s.split(".", 2);
+    const mm = String(parseInt(m, 10));
+    const ss = sub ? sub.replace(/^0+/, "") : "";
+    out = ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
+  } else if (s.includes("-")) {
+    const [m, sub] = s.split("-", 2);
+    const mm = String(parseInt(m, 10));
+    const ss = sub ? sub.replace(/^0+/, "") : "";
+    out = ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
+  } else if (/^\d+$/.test(s)) {
+    out = String(parseInt(s, 10));
+  }
+
+  DPT_DOT_CACHE.set(key, out);
+  return out;
+}
+
+/** ====================== LIGHT AGGREGATIE ====================== */
 export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   const byBase = new Map<string, LightAggregate>();
 
@@ -48,23 +84,20 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   );
 }
 
-/** ----------------- SWITCH AGGREGATIE (DPST-1-1) ----------------- */
+/** ====================== SWITCH AGGREGATIE ====================== */
 function isStatusName(name: string): boolean {
-  return /\bstatus\b/i.test(name);
+  return STATUS_RE.test(name);
 }
 function normalizeBaseName(name: string): string {
   let n = name.toLowerCase().trim();
-  n = n.replace(
-    /\b(status|aan\/?uit|aan|uit|schakel|switch|cmd|command)\b/g,
-    ""
-  );
+  n = n.replace(NAME_STRIP_RE, "");
   n = n.replace(/\s+/g, " ").trim();
   return n.length ? n : name.toLowerCase().trim();
 }
 
 export interface SwitchAggregate {
   name: string;
-  address?: string;
+  address?: string; // verplicht voor HA switch
   state_address?: string;
   consumedIds: Set<string>;
 }
@@ -87,7 +120,7 @@ export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
     } else {
       if (!agg.address) {
         agg.address = ga.address;
-        agg.name = ga.name;
+        agg.name = ga.name; // gebruik command-naam
       }
       agg.consumedIds.add(ga.id);
     }
@@ -95,6 +128,7 @@ export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
   return Array.from(byBase.values()).filter((a) => !!a.address);
 }
 
+/** ====================== HULP: verzamelde ids ====================== */
 export function collectConsumedIds(
   ...aggs: Array<{ consumedIds: Set<string> }[]>
 ): Set<string> {
@@ -104,29 +138,10 @@ export function collectConsumedIds(
   return consumed;
 }
 
-/** ----------------- SENSOR TYPE-MAPPING (HA value types) ----------------- */
-function normalizeDptToDot(dpt?: string): string | undefined {
-  if (!dpt) return undefined;
-  let s = dpt.trim().toLowerCase();
-  s = s.replace(/^dpst?-/, "");
-  s = s.replace(/_/g, "-");
-  s = s.replace(/\s+/g, "");
-  if (s.includes(".")) {
-    const [m, sub] = s.split(".", 2);
-    const mm = String(parseInt(m, 10));
-    const ss = sub ? sub.replace(/^0+/, "") : "";
-    return ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
-  }
-  if (s.includes("-")) {
-    const [m, sub] = s.split("-", 2);
-    const mm = String(parseInt(m, 10));
-    const ss = sub ? sub.replace(/^0+/, "") : "";
-    return ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
-  }
-  if (/^\d+$/.test(s)) return String(parseInt(s, 10));
-  return undefined;
-}
-
+/** ====================== SENSOR TYPE-MAPPING ======================
+ *  Bron: HA KNX → Sensor → "Value types".
+ *  We normaliseren DPT en mappen naar string-type. Valt terug op naam.
+ */
 const DPT_TO_HA: Record<string, string> = {
   // 5.*
   "5": "1byte_unsigned",
@@ -196,25 +211,32 @@ const DPT_TO_HA: Record<string, string> = {
   "12.101": "long_time_period_min",
 };
 
+const FALLBACK_PATTERNS = [
+  [/temp|temperatuur/i, "temperature"],
+  [/hum|humidity|rv/i, "humidity"],
+  [/lux|illuminance|lichtsterkte/i, "illuminance"],
+  [/\bppm\b|co2/i, "ppm"],
+  [/volt|spanning|voltage/i, "voltage"],
+  [/(^|\W)(amp|stroom|current|ma|a)($|\W)/i, "curr"],
+  [/power|vermogen|watt|kw\b/i, "power_2byte"],
+  [/press|druk/i, "pressure_2byte"],
+  [/wind.*km\/?h/i, "wind_speed_kmh"],
+  [/wind|windsnelheid/i, "wind_speed_ms"],
+  [/rain|regen/i, "rain_amount"],
+  [/flow|debiet/i, "volume_flow"],
+] as const;
+
 function fallbackTypeFromName(name?: string): string | undefined {
   if (!name) return undefined;
-  const n = name.toLowerCase();
-  if (/(temp|temperatuur)/.test(n)) return "temperature";
-  if (/(hum|humidity|rv)/.test(n)) return "humidity";
-  if (/(lux|illuminance|lichtsterkte)/.test(n)) return "illuminance";
-  if (/\bppm\b|co2/.test(n)) return "ppm";
-  if (/(volt|spanning|voltage)/.test(n)) return "voltage";
-  if (/(amp|stroom|current|mA|A\b)/.test(n)) return "curr";
-  if (/(power|vermogen|watt|kw\b)/.test(n)) return "power_2byte";
-  if (/(press|druk)/.test(n)) return "pressure_2byte";
-  if (/(wind).*(km\/?h)/.test(n)) return "wind_speed_kmh";
-  if (/(wind|windsnelheid)/.test(n)) return "wind_speed_ms";
-  if (/(rain|regen)/.test(n)) return "rain_amount";
-  if (/(flow|debiet)/.test(n)) return "volume_flow";
+  for (const [re, t] of FALLBACK_PATTERNS) if (re.test(name)) return t;
   return undefined;
 }
 
-function dptToSensorType(dpt?: string, name?: string): string | undefined {
+/** Exporteerbaar voor UI-annotaties (units). */
+export function dptToSensorType(
+  dpt?: string,
+  name?: string
+): string | undefined {
   const norm = normalizeDptToDot(dpt);
   if (norm && DPT_TO_HA[norm]) return DPT_TO_HA[norm];
 
@@ -224,10 +246,11 @@ function dptToSensorType(dpt?: string, name?: string): string | undefined {
   if (norm === "8") return DPT_TO_HA["8"];
   if (norm === "9") return DPT_TO_HA["9"];
   if (norm === "12") return DPT_TO_HA["12"];
+
   return fallbackTypeFromName(name);
 }
 
-/** ----------------- Fallback mapping voor losse GA's ----------------- */
+/** ====================== Fallback mapping voor losse GA's ====================== */
 export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   const t = guessEntityType(ga.dpt, ga.name);
 

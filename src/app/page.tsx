@@ -1,4 +1,4 @@
-import KnxUpload from "@/components/KnxUpload";
+import KnxUpload from "@/components/knx/KnxUpload";
 
 export default function Page() {
   return <KnxUpload />;
