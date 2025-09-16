@@ -1,9 +1,44 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { KnxCatalog } from "@/lib/knx/types";
 import { parseKnxproj } from "@/lib/knx/parse";
 import { toCatalogYaml, toHomeAssistantYaml } from "@/lib/knx/export";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Progress } from "@/components/ui/progress";
+import { toast } from "sonner";
+
+import {
+  UploadCloud,
+  FileDown,
+  RefreshCw,
+  Bug,
+  Copy,
+  Check,
+  PackageOpen,
+} from "lucide-react";
 
 function downloadText(filename: string, text: string) {
   const blob = new Blob([text], { type: "text/yaml;charset=utf-8" });
@@ -18,18 +53,21 @@ function downloadText(filename: string, text: string) {
 export default function KnxUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<KnxCatalog | null>(null);
 
-  // Opties
+  // options
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
   const [debug, setDebug] = useState(false);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const dropRef = useRef<HTMLDivElement | null>(null);
 
   const catalogYaml = useMemo(
     () => (catalog ? toCatalogYaml(catalog) : ""),
     [catalog]
   );
-
   const haYaml = useMemo(
     () =>
       catalog ? toHomeAssistantYaml(catalog, { dropReserveFromUnknown }) : "",
@@ -40,14 +78,26 @@ export default function KnxUpload() {
     if (!file) return;
     setBusy(true);
     setError(null);
+    setProgress(12);
+
     try {
       const cat = await parseKnxproj(file, { debug });
+      setProgress(88);
       setCatalog(cat);
+      setProgress(100);
+
+      toast.success("Gereed", {
+        description: `${cat.group_addresses.length} group addresses gevonden.`,
+      });
     } catch (e: unknown) {
       console.error(e);
-      setError(e instanceof Error ? e.message : "Kon het bestand niet parsen.");
+      const msg =
+        e instanceof Error ? e.message : "Kon het bestand niet parsen.";
+      setError(msg);
+      toast.error("Fout bij parsen", { description: msg });
     } finally {
-      setBusy(false);
+      setTimeout(() => setBusy(false), 250);
+      setTimeout(() => setProgress(0), 600);
     }
   }
 
@@ -55,110 +105,314 @@ export default function KnxUpload() {
     setFile(null);
     setCatalog(null);
     setError(null);
+    setProgress(0);
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) setFile(f);
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    if (!isDragging) setIsDragging(true);
+  }
+
+  function onDragLeave(e: React.DragEvent) {
+    if (e.currentTarget === dropRef.current) setIsDragging(false);
+  }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Gekopieerd", {
+        description: "YAML is naar het klembord gekopieerd.",
+      });
+      return true;
+    } catch {
+      toast.error("Kopiëren mislukt", {
+        description: "Kon de tekst niet kopiëren.",
+      });
+      return false;
+    }
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <h1 className="text-2xl font-semibold mb-3">
-        KNX → Home Assistant (client-side)
-      </h1>
-      <p className="text-sm text-gray-600 mb-4">
-        Upload <code>.knxproj</code>. Alles gebeurt lokaal in je browser (ZIP →
-        XML → YAML).
-      </p>
-
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4 mb-4">
-        <input
-          type="file"
-          accept=".knxproj,application/zip"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        />
-
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={dropReserveFromUnknown}
-              onChange={(e) => setDropReserveFromUnknown(e.target.checked)}
-            />
-            <span>
-              Filter <code>Reserve</code> uit <code>_unknown</code>
-            </span>
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={debug}
-              onChange={(e) => setDebug(e.target.checked)}
-            />
-            <span>Debug console</span>
-          </label>
+    <TooltipProvider>
+      <div className="mx-auto max-w-6xl p-6">
+        {/* header */}
+        <div className="mb-6">
+          <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 to-muted p-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-3">
+                <PackageOpen className="h-6 w-6 text-primary" />
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  KNX → Home Assistant
+                </h1>
+              </div>
+              <div className="ms-auto flex items-center gap-2">
+                {catalog && (
+                  <Badge variant="secondary">
+                    {catalog.project_name ?? "Onbekend"}
+                  </Badge>
+                )}
+                {catalog && (
+                  <Badge variant="outline">
+                    {catalog.group_addresses.length} GA&apos;s
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Parseer een <code>.knxproj</code> lokaal (ZIP → XML → YAML). Niets
+              verlaat je browser.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleParse}
-            disabled={!file || busy}
-            className="rounded-md border px-3 py-1 disabled:opacity-50"
-          >
-            {busy ? "Bezig…" : "Parsen"}
-          </button>
-          <button
-            onClick={handleReset}
-            disabled={busy && !catalog}
-            className="rounded-md border px-3 py-1 disabled:opacity-50"
-          >
-            Reset
-          </button>
-        </div>
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle>Upload & opties</CardTitle>
+            <CardDescription>
+              Kies een bestand of sleep het in het vak hieronder.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {/* dropzone */}
+            <div
+              ref={dropRef}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              className={[
+                "relative flex min-h-[140px] items-center justify-center rounded-xl border-2 border-dashed transition",
+                isDragging
+                  ? "border-primary bg-primary/5"
+                  : "border-muted-foreground/20 hover:bg-muted/40",
+              ].join(" ")}
+            >
+              <div className="pointer-events-none flex flex-col items-center gap-2 text-center">
+                <UploadCloud className="h-6 w-6 opacity-80" />
+                <div className="text-sm">
+                  Sleep je <code>.knxproj</code> hierheen of
+                  <span className="mx-1 font-medium">klik</span> hieronder om te
+                  selecteren.
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Ondersteund: <code>.knxproj</code> (ZIP met XML)
+                </div>
+              </div>
+              {/* invisible input that still allows click */}
+              <Input
+                type="file"
+                accept=".knxproj,application/zip"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                aria-label=".knxproj bestand"
+              />
+            </div>
+
+            {/* options */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:items-center">
+              <div className="space-y-1">
+                <Label className="text-sm text-muted-foreground">
+                  Geselecteerd bestand
+                </Label>
+                <div className="truncate text-sm">
+                  {file ? (
+                    <Badge variant="secondary" className="max-w-full truncate">
+                      {file.name}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Geen bestand geselecteerd
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="opt-reserve"
+                    checked={dropReserveFromUnknown}
+                    onCheckedChange={setDropReserveFromUnknown}
+                    disabled={busy}
+                  />
+                  <Label htmlFor="opt-reserve" className="text-sm">
+                    Filter <code>Reserve</code> uit <code>_unknown</code>
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="opt-debug"
+                    checked={debug}
+                    onCheckedChange={setDebug}
+                    disabled={busy}
+                  />
+                  <Label htmlFor="opt-debug" className="text-sm">
+                    Debug console
+                  </Label>
+                </div>
+              </div>
+
+              <div className="flex gap-2 md:justify-end">
+                <Button onClick={handleParse} disabled={!file || busy}>
+                  {busy ? "Bezig…" : "Parsen"}
+                </Button>
+                <Button
+                  onClick={handleReset}
+                  disabled={busy && !catalog}
+                  variant="outline"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Reset
+                </Button>
+              </div>
+            </div>
+
+            {busy && (
+              <div className="flex items-center gap-3">
+                <Progress value={progress} className="h-2 w-full" />
+                <span className="text-xs text-muted-foreground">
+                  {progress ? `${progress}%` : "…"}
+                </span>
+              </div>
+            )}
+
+            {error && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                <Bug className="mr-2 inline h-4 w-4" />
+                {error}
+              </div>
+            )}
+          </CardContent>
+
+          <Separator />
+
+          <CardContent className="pt-6">
+            {!catalog ? (
+              <p className="text-sm text-muted-foreground">
+                Nog niets geüpload. Sleep een bestand in het vak of klik om te
+                selecteren.
+              </p>
+            ) : (
+              <>
+                <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+                  <div className="text-muted-foreground">
+                    Project:{" "}
+                    <span className="font-medium text-foreground">
+                      {catalog.project_name ?? "Onbekend"}
+                    </span>
+                    <span className="mx-2">•</span>
+                    {catalog.group_addresses.length} group addresses
+                  </div>
+                  <div className="ms-auto flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        downloadText("knx_catalog.yaml", catalogYaml)
+                      }
+                    >
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Catalog YAML
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        downloadText("knx_homeassistant.yaml", haYaml)
+                      }
+                    >
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Home Assistant YAML
+                    </Button>
+                  </div>
+                </div>
+
+                <Tabs defaultValue="ha" className="w-full">
+                  <TabsList>
+                    <TabsTrigger value="ha">Home Assistant YAML</TabsTrigger>
+                    <TabsTrigger value="catalog">Catalog YAML</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="ha" className="mt-3">
+                    <CodePanel
+                      value={haYaml}
+                      onCopy={() => copyToClipboard(haYaml)}
+                      ariaLabel="Home Assistant YAML"
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="catalog" className="mt-3">
+                    <CodePanel
+                      value={catalogYaml}
+                      onCopy={() => copyToClipboard(catalogYaml)}
+                      ariaLabel="Catalog YAML"
+                    />
+                  </TabsContent>
+                </Tabs>
+              </>
+            )}
+          </CardContent>
+
+          <CardFooter />
+        </Card>
+      </div>
+    </TooltipProvider>
+  );
+}
+
+/** small inline code panel with copy button */
+function CodePanel({
+  value,
+  onCopy,
+  ariaLabel,
+}: {
+  value: string;
+  onCopy: () => Promise<boolean>;
+  ariaLabel: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    const ok = await onCopy();
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <div className="absolute right-2 top-2 z-10">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              aria-label="Kopieer"
+              onClick={handleCopy}
+            >
+              {copied ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={6}>
+            Kopieer naar klembord
+          </TooltipContent>
+        </Tooltip>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800">
-          {error}
-        </div>
-      )}
-
-      {catalog && (
-        <>
-          <div className="mb-3 text-sm text-gray-700">
-            Project: <b>{catalog.project_name ?? "Onbekend"}</b> —{" "}
-            {catalog.group_addresses.length} group addresses
-          </div>
-
-          <div className="mb-2 flex gap-2">
-            <button
-              onClick={() => downloadText("knx_catalog.yaml", catalogYaml)}
-              className="rounded-md border px-3 py-1"
-            >
-              Download catalog YAML
-            </button>
-            <button
-              onClick={() => downloadText("knx_homeassistant.yaml", haYaml)}
-              className="rounded-md border px-3 py-1"
-            >
-              Download Home Assistant YAML
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h2 className="font-medium mb-2">Catalog YAML</h2>
-              <pre className="h-96 overflow-auto rounded-md border bg-gray-50 p-3 text-xs">
-                {catalogYaml}
-              </pre>
-            </div>
-            <div>
-              <h2 className="font-medium mb-2">
-                Home Assistant YAML (voorstel)
-              </h2>
-              <pre className="h-96 overflow-auto rounded-md border bg-gray-50 p-3 text-xs">
-                {haYaml}
-              </pre>
-            </div>
-          </div>
-        </>
-      )}
+      <ScrollArea className="h-[28rem] rounded-lg border bg-muted/40">
+        <pre className="whitespace-pre-wrap p-4 text-xs">{value}</pre>
+      </ScrollArea>
     </div>
   );
 }
