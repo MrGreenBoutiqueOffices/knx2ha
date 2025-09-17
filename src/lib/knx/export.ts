@@ -16,24 +16,19 @@ import {
   mapSingleGaToEntity,
 } from "./aggregate";
 
-export function toCatalogYaml(catalog: KnxCatalog): string {
-  const data = {
-    project_name: catalog.project_name ?? null,
-    group_addresses: catalog.group_addresses.map((ga) => ({
-      id: ga.id,
-      name: ga.name,
-      address: ga.address,
-      dpt: ga.dpt,
-      description: ga.description,
-    })),
-  };
-  return YAML.stringify(data, { aliasDuplicateObjects: false });
+export interface HaEntities {
+  switches: HaSwitch[];
+  binarySensors: HaBinarySensor[];
+  lights: HaLight[];
+  sensors: HaSensor[];
+  covers: HaCover[];
+  unknowns: UnknownEntity[];
 }
 
-export function toHomeAssistantYaml(
+export function buildHaEntities(
   catalog: KnxCatalog,
   opts: ExportOptions = {}
-): string {
+): HaEntities {
   const switches: HaSwitch[] = [];
   const binarySensors: HaBinarySensor[] = [];
   const lights: HaLight[] = [];
@@ -44,7 +39,6 @@ export function toHomeAssistantYaml(
   const laAggs = buildLaLightAggregates(catalog.group_addresses);
   for (const a of laAggs) {
     if (!a.on_off) continue;
-
     const entry: HaLight = { name: a.name, address: a.on_off };
     if (a.on_off_state) entry.state_address = a.on_off_state;
     if (a.brightness) entry.brightness_address = a.brightness;
@@ -56,16 +50,13 @@ export function toHomeAssistantYaml(
   for (const s of switchAggs) {
     const entry: HaSwitch = { name: s.name, address: s.address! };
     if (s.state_address) entry.state_address = s.state_address;
-    else {
-      entry.respond_to_read = true;
-    }
+    else entry.respond_to_read = true;
     switches.push(entry);
   }
 
   const consumed = collectConsumedIds(laAggs, switchAggs);
   for (const ga of catalog.group_addresses) {
     if (consumed.has(ga.id)) continue;
-
     const mapped = mapSingleGaToEntity(ga);
 
     switch (mapped.domain) {
@@ -94,13 +85,83 @@ export function toHomeAssistantYaml(
     ? unknowns.filter((x) => x.name.trim().toLowerCase() !== "reserve")
     : unknowns;
 
+  return {
+    switches,
+    binarySensors,
+    lights,
+    sensors,
+    covers,
+    unknowns: finalUnknowns,
+  };
+}
+
+/** ---------- YAML exporter ---------- */
+export function toHomeAssistantYaml(
+  catalog: KnxCatalog,
+  opts: ExportOptions = {}
+): string {
+  const ent = buildHaEntities(catalog, opts);
+
   const knx: Record<string, unknown> = {};
-  if (switches.length) knx["switch"] = switches;
-  if (binarySensors.length) knx["binary_sensor"] = binarySensors;
-  if (lights.length) knx["light"] = lights;
-  if (sensors.length) knx["sensor"] = sensors;
-  if (covers.length) knx["cover"] = covers;
-  if (finalUnknowns.length) knx["_unknown"] = finalUnknowns;
+  if (ent.switches.length) knx["switch"] = ent.switches;
+  if (ent.binarySensors.length) knx["binary_sensor"] = ent.binarySensors;
+  if (ent.lights.length) knx["light"] = ent.lights;
+  if (ent.sensors.length) knx["sensor"] = ent.sensors;
+  if (ent.covers.length) knx["cover"] = ent.covers;
+  if (ent.unknowns.length) knx["_unknown"] = ent.unknowns;
 
   return YAML.stringify({ knx }, { aliasDuplicateObjects: false });
+}
+
+/** ---------- Catalog YAML ---------- */
+export function toCatalogYaml(catalog: KnxCatalog): string {
+  const data = {
+    project_name: catalog.project_name ?? null,
+    group_addresses: catalog.group_addresses.map((ga) => ({
+      id: ga.id,
+      name: ga.name,
+      address: ga.address,
+      dpt: ga.dpt,
+      description: ga.description,
+    })),
+  };
+  return YAML.stringify(data, { aliasDuplicateObjects: false });
+}
+
+export interface EntitySummary {
+  counts: {
+    switch: number;
+    binary_sensor: number;
+    light: number;
+    sensor: number;
+    cover: number;
+    _unknown: number;
+    total: number;
+  };
+  sensorsByType: Record<string, number>;
+}
+
+export function summarizeEntities(ent: HaEntities): EntitySummary {
+  const counts = {
+    switch: ent.switches.length,
+    binary_sensor: ent.binarySensors.length,
+    light: ent.lights.length,
+    sensor: ent.sensors.length,
+    cover: ent.covers.length,
+    _unknown: ent.unknowns.length,
+    total:
+      ent.switches.length +
+      ent.binarySensors.length +
+      ent.lights.length +
+      ent.sensors.length +
+      ent.covers.length +
+      ent.unknowns.length,
+  };
+
+  const byType: Record<string, number> = {};
+  for (const s of ent.sensors) {
+    byType[s.type] = (byType[s.type] ?? 0) + 1;
+  }
+
+  return { counts, sensorsByType: byType };
 }
