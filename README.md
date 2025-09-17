@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# KNX2HA Parser
+
+This project is a **Next.js application** that converts KNX configuration files into **Home Assistant compatible YAML configuration**. It automatically detects entities (lights, switches, covers, sensors, …) and annotates them for direct use in Home Assistant.
+
+## Key Features
+
+- 🔍 **KNX Group Address Parsing**  
+  Converts KNX addresses and DPTs into Home Assistant entities.
+- ⚡ **Smart Heuristics**  
+  Automatically guesses the correct entity type (light, switch, cover, sensor, …).
+- 📝 **YAML Generator**  
+  Produces valid Home Assistant configurations (`configuration.yaml` or packages).
+- 🗂 **Aggregate View**  
+  Combines related entities into logical sets (e.g., covers with state and position).
+- 🌍 **Next.js Frontend**  
+  Web interface for uploading, previewing, and exporting configurations.
 
 ## Getting Started
 
-First, run the development server:
+To run this project locally, follow these steps:
+
+### 1. Requirements
+
+At least the following software should be installed:
+
+- Node.js 20+
+- npm
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Start development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Build for production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Resources
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [KNX Association](https://www.knx.org/)
+- [Home Assistant KNX Integration](https://www.home-assistant.io/integrations/knx/)
+- [Next.js Documentation](https://nextjs.org/docs)
