@@ -1,5 +1,5 @@
+import { KnxCatalog } from "@/lib/types";
 import { parseKnxproj, type ParseProgress } from "../lib/knx/parse";
-import type { KnxCatalog } from "../lib/knx/types";
 
 type Req = { t: "parse"; file: File; concurrency?: number };
 type Res =

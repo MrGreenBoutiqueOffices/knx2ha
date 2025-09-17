@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { KnxCatalog } from "@/lib/knx/types";
 import type { ParseProgress } from "@/lib/knx/parse";
+import { KnxCatalog } from "@/lib/types";
 
 type WorkerRes =
   | { t: "progress"; p: ParseProgress }
