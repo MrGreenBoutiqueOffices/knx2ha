@@ -8,7 +8,7 @@ import {
   buildHaEntities,
   summarizeEntities,
 } from "@/lib/knx/export";
-import { useKnxWorker } from "@/hooks/useKnxWorker";
+import { useKnxWorker } from "@/hooks/use-knx-worker";
 
 import {
   Card,

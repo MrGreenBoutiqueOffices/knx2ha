@@ -1,6 +1,6 @@
 import { unzip } from "fflate";
 import type { GroupAddress, KnxCatalog } from "../types";
-import { ParseProgress } from "../types/parse";
+import { ParseOptions, ParseProgress } from "../types/parse";
 
 const RE_PROJECT = /<(?:\w+:)?Project\b[^>]*\bName="([^"]+)"/i;
 const RE_PROJ_INFO_1 =
@@ -17,9 +17,9 @@ function post(
 }
 
 function decodeGaIntToTriple(n: number): string {
-  const main = (n >> 11) & 0x1f; // 5 bits
-  const middle = (n >> 8) & 0x07; // 3 bits
-  const sub = n & 0xff; // 8 bits
+  const main = (n >> 11) & 0x1f;
+  const middle = (n >> 8) & 0x07;
+  const sub = n & 0xff;
   return `${main}/${middle}/${sub}`;
 }
 
@@ -90,13 +90,10 @@ function scanGroupAddressesStream(
     let tagMatch: RegExpExecArray | null;
     while ((tagMatch = RE_GROUP_TAG_G.exec(buf)) !== null) {
       const attrStr = tagMatch[1];
-
       const attrs: Record<string, string | undefined> = {};
       RE_ATTR_G.lastIndex = 0;
       let kv: RegExpExecArray | null;
-      while ((kv = RE_ATTR_G.exec(attrStr)) !== null) {
-        attrs[kv[1]] = kv[2];
-      }
+      while ((kv = RE_ATTR_G.exec(attrStr)) !== null) attrs[kv[1]] = kv[2];
 
       const address = normalizeAddressFromAttrs(attrs);
       if (!address) continue;
@@ -114,11 +111,7 @@ function scanGroupAddressesStream(
       gas.push({ id, name, address, dpt, description });
     }
 
-    if (!final) {
-      buf = buf.slice(Math.max(0, buf.length - tailKeep));
-    } else {
-      buf = "";
-    }
+    buf = final ? "" : buf.slice(Math.max(0, buf.length - tailKeep));
   };
 
   for (let off = 0; off < u8.length; off += chunkSize) {
@@ -136,10 +129,7 @@ function scanGroupAddressesStream(
 
 export async function parseKnxproj(
   file: File,
-  opts?: {
-    debug?: boolean;
-    onProgress?: (p: ParseProgress) => void;
-  }
+  opts?: ParseOptions
 ): Promise<KnxCatalog> {
   const onProgress = opts?.onProgress;
   post(onProgress, { phase: "load_zip", percent: 2 });
@@ -225,13 +215,16 @@ export async function parseKnxproj(
     processedFiles,
   });
 
-  ADDRESS_KEY_CACHE.clear();
+  if (opts?.addressCache === "clear_before") ADDRESS_KEY_CACHE.clear();
+
   const map = new Map<string, GroupAddress>();
   for (const ga of gathered) map.set(`${ga.address}@@${ga.name}`, ga);
 
   const list = Array.from(map.values()).sort((a, b) =>
     compareAddress(a.address, b.address)
   );
+
+  if (opts?.addressCache === "clear_after") ADDRESS_KEY_CACHE.clear();
 
   post(onProgress, { phase: "done", percent: 100, totalFiles, processedFiles });
 
