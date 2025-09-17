@@ -186,7 +186,6 @@ export async function parseKnxproj(
       filePercent: 100,
     });
 
-    await Promise.resolve();
   }
 
   if (!projectName) {
