@@ -38,6 +38,7 @@ export default function KnxUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [catalog, setCatalog] = useState<KnxCatalog | null>(null);
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
+  const [dzKey, setDzKey] = useState(0);
 
   const entities = useMemo(
     () =>
@@ -65,7 +66,7 @@ export default function KnxUpload() {
       const cat = await parse(file);
       setCatalog(cat);
       toast.success("Ready", {
-        description: `${cat.group_addresses.length} group addresses founded.`,
+        description: `${cat.group_addresses.length} group addresses found.`,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not parse the file.";
@@ -76,6 +77,7 @@ export default function KnxUpload() {
   function handleReset() {
     setFile(null);
     setCatalog(null);
+    setDzKey((k) => k + 1);
   }
 
   return (
@@ -119,7 +121,7 @@ export default function KnxUpload() {
         </CardHeader>
 
         <CardContent className="space-y-5">
-          <UploadDropzone onSelect={setFile} />
+          <UploadDropzone key={dzKey} onSelect={setFile} />
 
           <OptionsBar
             file={file}
