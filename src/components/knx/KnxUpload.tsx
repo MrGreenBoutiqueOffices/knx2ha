@@ -33,13 +33,7 @@ import StatsBar from "./StatsBar";
 import CodePanel from "./CodePanel";
 
 export default function KnxUpload() {
-  const {
-    parse,
-    busy,
-    progress,
-    progressInfo,
-    error: workerError,
-  } = useKnxWorker(4);
+  const { parse, busy, progress, progressInfo, error } = useKnxWorker();
 
   const [file, setFile] = useState<File | null>(null);
   const [catalog, setCatalog] = useState<KnxCatalog | null>(null);
@@ -140,7 +134,7 @@ export default function KnxUpload() {
             busy={busy}
             progress={progress}
             info={progressInfo}
-            error={workerError}
+            error={error}
           />
         </CardContent>
 

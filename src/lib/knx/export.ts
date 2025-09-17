@@ -1,4 +1,4 @@
-import YAML from "yaml";
+import YAML, { Document, YAMLMap, YAMLSeq, Scalar } from "yaml";
 import {
   ExportOptions,
   KnxCatalog,
@@ -8,6 +8,7 @@ import {
   HaSensor,
   HaCover,
   UnknownEntity,
+  GroupAddress,
 } from "../types";
 import {
   buildLaLightAggregates,
@@ -113,35 +114,85 @@ export function buildHaEntities(
   };
 }
 
+function isQuotedField(key: string): boolean {
+  if (key === "name") return true;
+  return (
+    key === "address" ||
+    key.endsWith("_address") ||
+    key.endsWith("_state_address")
+  );
+}
+
+function dq(doc: Document.Parsed, value: string): Scalar<string> {
+  const node = doc.createNode(value) as Scalar<string>;
+  node.type = "QUOTE_DOUBLE";
+  return node;
+}
+
+function domainListToYaml<T extends object>(
+  doc: Document.Parsed,
+  list: T[]
+): YAMLSeq<YAMLMap> {
+  const seq = doc.createNode([]) as YAMLSeq<YAMLMap>;
+
+  for (const item of list) {
+    const map = doc.createNode({}) as YAMLMap;
+    for (const [k, v] of Object.entries(item)) {
+      if (v === undefined) continue;
+      if (typeof v === "string" && isQuotedField(k)) {
+        map.set(k, dq(doc, v));
+      } else {
+        map.set(k, v as unknown);
+      }
+    }
+    seq.add(map);
+  }
+  return seq;
+}
+
+function entitiesToYaml(doc: Document.Parsed, ent: HaEntities): YAMLMap {
+  const root = doc.createNode({ knx: {} }) as YAMLMap;
+  const knx = root.get("knx") as YAMLMap;
+
+  if (ent.switches.length)
+    knx.set("switch", domainListToYaml(doc, ent.switches));
+  if (ent.binarySensors.length)
+    knx.set("binary_sensor", domainListToYaml(doc, ent.binarySensors));
+  if (ent.lights.length) knx.set("light", domainListToYaml(doc, ent.lights));
+  if (ent.sensors.length) knx.set("sensor", domainListToYaml(doc, ent.sensors));
+  if (ent.covers.length) knx.set("cover", domainListToYaml(doc, ent.covers));
+  if (ent.unknowns.length)
+    knx.set("_unknown", domainListToYaml(doc, ent.unknowns));
+
+  return root;
+}
+
 export function toHomeAssistantYaml(
   catalog: KnxCatalog,
   opts: ExportOptions = {}
 ): string {
   const ent = buildHaEntities(catalog, opts);
 
-  const knx: Record<string, unknown> = {};
-  if (ent.switches.length) knx["switch"] = ent.switches;
-  if (ent.binarySensors.length) knx["binary_sensor"] = ent.binarySensors;
-  if (ent.lights.length) knx["light"] = ent.lights;
-  if (ent.sensors.length) knx["sensor"] = ent.sensors;
-  if (ent.covers.length) knx["cover"] = ent.covers;
-  if (ent.unknowns.length) knx["_unknown"] = ent.unknowns;
+  const doc = new YAML.Document();
+  doc.contents = entitiesToYaml(doc as Document.Parsed, ent);
 
-  return YAML.stringify({ knx }, { aliasDuplicateObjects: false });
+  return String(doc);
 }
 
 export function toCatalogYaml(catalog: KnxCatalog): string {
-  const data = {
-    project_name: catalog.project_name ?? null,
-    group_addresses: catalog.group_addresses.map((ga) => ({
-      id: ga.id,
-      name: ga.name,
-      address: ga.address,
-      dpt: ga.dpt,
-      description: ga.description,
-    })),
-  };
-  return YAML.stringify(data, { aliasDuplicateObjects: false });
+  return YAML.stringify(
+    {
+      project_name: catalog.project_name ?? null,
+      group_addresses: catalog.group_addresses.map((ga: GroupAddress) => ({
+        id: ga.id,
+        name: ga.name,
+        address: ga.address,
+        dpt: ga.dpt,
+        description: ga.description,
+      })),
+    },
+    { aliasDuplicateObjects: false }
+  );
 }
 
 export interface EntitySummary {
@@ -175,9 +226,7 @@ export function summarizeEntities(ent: HaEntities): EntitySummary {
   };
 
   const byType: Record<string, number> = {};
-  for (const s of ent.sensors) {
-    byType[s.type] = (byType[s.type] ?? 0) + 1;
-  }
+  for (const s of ent.sensors) byType[s.type] = (byType[s.type] ?? 0) + 1;
 
   return { counts, sensorsByType: byType };
 }

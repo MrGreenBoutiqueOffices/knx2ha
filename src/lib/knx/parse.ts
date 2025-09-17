@@ -1,17 +1,5 @@
-"use client";
-
-import JSZip from "jszip";
-import { XMLParser } from "fast-xml-parser";
-import { GroupAddress, KnxCatalog } from "../types";
-import {
-  UnknownRecord,
-  isObject,
-  toStringIfScalar,
-  ensureArray,
-  extractText,
-  keyEndsWith,
-  decodeGaIntToTriple,
-} from "./utils";
+import { unzip } from "fflate";
+import type { GroupAddress, KnxCatalog } from "../types";
 
 export type ParsePhase =
   | "load_zip"
@@ -30,183 +18,99 @@ export interface ParseProgress {
   filePercent?: number;
 }
 
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: "",
-});
+function decodeGaIntToTriple(n: number): string {
+  const main = (n >> 11) & 0x1f; // 5 bits
+  const middle = (n >> 8) & 0x07; // 3 bits
+  const sub = n & 0xff; // 8 bits
+  return `${main}/${middle}/${sub}`;
+}
 
-function normalizeAddress(gaNode: unknown): string | undefined {
-  if (!isObject(gaNode)) return undefined;
+function post(
+  onProgress: ((p: ParseProgress) => void) | undefined,
+  p: ParseProgress
+) {
+  if (onProgress) onProgress(p);
+}
 
-  const addrRaw =
-    gaNode["Address"] ?? gaNode["address"] ?? gaNode["Addr"] ?? gaNode["addr"];
-  const addrStr = toStringIfScalar(addrRaw);
-  if (addrStr) {
-    const s = addrStr.trim();
+const RE_PROJECT = /<(?:\w+:)?Project\b[^>]*\bName="([^"]+)"/i;
+const RE_PROJ_INFO_1 =
+  /<(?:\w+:)?ProjectInformation\b[^>]*\bProjectName="([^"]+)"/i;
+const RE_PROJ_INFO_2 = /<(?:\w+:)?ProjectInformation\b[^>]*\bName="([^"]+)"/i;
+const RE_GROUP_TAG = /<(?::?\w+:)?GroupAddress\b([^>]*)>/gi;
+const RE_ATTR = /\b([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*"([^"]*)"/g;
+
+function normalizeAddressFromAttrs(
+  attrs: Record<string, string | undefined>
+): string | undefined {
+  const raw = attrs["Address"];
+  if (raw) {
+    const s = raw.trim();
     if (s.includes("/")) return s;
     if (/^\d+$/.test(s)) return decodeGaIntToTriple(parseInt(s, 10));
   }
-
-  const main = toStringIfScalar(
-    gaNode["MainGroup"] ??
-      gaNode["mainGroup"] ??
-      gaNode["Main"] ??
-      gaNode["main"] ??
-      gaNode["Main Address"] ??
-      gaNode["MainAddress"]
-  );
-  const middle = toStringIfScalar(
-    gaNode["MiddleGroup"] ??
-      gaNode["middleGroup"] ??
-      gaNode["Middle"] ??
-      gaNode["middle"] ??
-      gaNode["Middle Address"] ??
-      gaNode["MiddleAddress"]
-  );
-  const sub = toStringIfScalar(
-    gaNode["SubGroup"] ??
-      gaNode["subGroup"] ??
-      gaNode["Sub"] ??
-      gaNode["sub"] ??
-      gaNode["Sub Address"] ??
-      gaNode["SubAddress"]
-  );
-  if (main && middle && sub) return `${main}/${middle}/${sub}`;
-  return undefined;
-}
-
-function isKeyGroupAddresses(key: string) {
-  return keyEndsWith(key, "GroupAddresses");
-}
-function isKeyGroupAddress(key: string) {
-  return keyEndsWith(key, "GroupAddress");
-}
-function isKeyProject(key: string) {
-  return keyEndsWith(key, "Project");
-}
-function isKeyProjectHeader(key: string) {
-  return keyEndsWith(key, "ProjectHeader") || keyEndsWith(key, "Header");
-}
-function isKeyProjectInfo(key: string) {
-  return (
-    keyEndsWith(key, "ProjectInformation") || keyEndsWith(key, "ProjectInfo")
-  );
-}
-
-function findProjectName(json: unknown): string | undefined {
-  if (!isObject(json)) return undefined;
-
-  for (const key of Object.keys(json)) {
-    const node = json[key];
-
-    if (
-      (isKeyProject(key) || isKeyProjectHeader(key) || isKeyProjectInfo(key)) &&
-      isObject(node)
-    ) {
-      const name =
-        extractText(node, [
-          "Name",
-          "ProjectName",
-          "Title",
-          "ProjectTitle",
-          "Project",
-          "name",
-        ]) ?? undefined;
-      if (name) return name;
-    }
-
-    if (isObject(node)) {
-      const deep = findProjectName(node);
-      if (deep) return deep;
-    }
+  const mainStr = attrs["MainGroup"] ?? attrs["Main"] ?? undefined;
+  const midStr = attrs["MiddleGroup"] ?? attrs["Middle"] ?? undefined;
+  const subStr = attrs["SubGroup"] ?? attrs["Sub"] ?? undefined;
+  if (mainStr && midStr && subStr) {
+    const m = parseInt(mainStr, 10),
+      mi = parseInt(midStr, 10),
+      su = parseInt(subStr, 10);
+    if (Number.isFinite(m) && Number.isFinite(mi) && Number.isFinite(su))
+      return `${m}/${mi}/${su}`;
   }
   return undefined;
 }
 
-function pushIfValid(ga: unknown, out: GroupAddress[]): void {
-  if (!isObject(ga)) return;
-
-  const idFromKeys =
-    extractText(ga, ["Id", "id", "RefId", "refId", "Identifier"]) ?? undefined;
-  const nameFromKeys =
-    extractText(ga, [
-      "Name",
-      "name",
-      "Text",
-      "text",
-      "Description",
-      "description",
-    ]) ??
-    idFromKeys ??
-    "Unnamed";
-  const address = normalizeAddress(ga);
-
-  const dpt =
-    extractText(ga, ["DatapointType", "DPT", "DPTs", "Type", "type"]) ??
-    extractText(
-      isObject(ga["Parameters"])
-        ? (ga["Parameters"] as UnknownRecord)
-        : undefined,
-      ["DatapointType", "DPT", "DPTs"]
-    ) ??
-    undefined;
-
-  if (address) {
-    const description =
-      extractText(ga, ["Description", "description"]) ?? undefined;
-    out.push({
-      id: idFromKeys ?? `${nameFromKeys}:${address}`,
-      name: nameFromKeys,
-      address,
-      description,
-      dpt,
-    });
-  }
+function addressKey(a: string): [number, number, number] {
+  const [m, mi, s] = a.split("/").map((x) => parseInt(x, 10));
+  return [m || 0, mi || 0, s || 0];
 }
 
-function collectGroupAddresses(json: unknown, out: GroupAddress[]): void {
-  if (!isObject(json)) return;
-
-  for (const key of Object.keys(json)) {
-    const node = json[key];
-
-    if (isKeyGroupAddresses(key) && isObject(node)) {
-      for (const childKey of Object.keys(node)) {
-        if (isKeyGroupAddress(childKey)) {
-          const list = ensureArray<unknown>(node[childKey]);
-          for (const ga of list) pushIfValid(ga, out);
-        }
-      }
-    }
-    if (isKeyGroupAddress(key)) {
-      const list = ensureArray<unknown>(node);
-      for (const ga of list) pushIfValid(ga, out);
-    }
-    if (isObject(node)) collectGroupAddresses(node, out);
-  }
+function compareAddress(a: string, b: string): number {
+  const A = addressKey(a);
+  const B = addressKey(b);
+  return A[0] - B[0] || A[1] - B[1] || A[2] - B[2];
 }
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, idx: number) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
+function scanGroupAddresses(
+  filename: string,
+  xml: string
+): { gas: GroupAddress[]; projectName: string | null } {
+  const gas: GroupAddress[] = [];
+  let projectName: string | null = null;
 
-  async function worker() {
-    while (true) {
-      const current = next++;
-      if (current >= items.length) break;
-      results[current] = await fn(items[current], current);
-    }
+  let m = RE_PROJECT.exec(xml);
+  if (m) projectName = m[1];
+  if (!projectName) {
+    m = RE_PROJ_INFO_1.exec(xml) || RE_PROJ_INFO_2.exec(xml);
+    if (m) projectName = m[1];
   }
 
-  const runners = Array.from({ length: Math.min(limit, items.length) }, () =>
-    worker()
-  );
-  await Promise.all(runners);
-  return results;
+  let tagMatch: RegExpExecArray | null;
+  while ((tagMatch = RE_GROUP_TAG.exec(xml)) !== null) {
+    const attrStr = tagMatch[1];
+    const attrs: Record<string, string | undefined> = {};
+    RE_ATTR.lastIndex = 0;
+    let kv: RegExpExecArray | null;
+    while ((kv = RE_ATTR.exec(attrStr)) !== null) attrs[kv[1]] = kv[2];
+
+    const address = normalizeAddressFromAttrs(attrs);
+    if (!address) continue;
+
+    const id = attrs["Id"] || attrs["ID"] || `${filename}#${gas.length}`;
+    const name =
+      attrs["Name"] || attrs["Text"] || attrs["Description"] || "Unknown";
+    const dpt =
+      attrs["DPTs"] ||
+      attrs["DatapointType"] ||
+      attrs["Datapoint"] ||
+      undefined;
+    const description = attrs["Description"] || undefined;
+
+    gas.push({ id, name, address, dpt, description });
+  }
+
+  return { gas, projectName };
 }
 
 export async function parseKnxproj(
@@ -214,29 +118,38 @@ export async function parseKnxproj(
   opts?: {
     debug?: boolean;
     onProgress?: (p: ParseProgress) => void;
-    concurrency?: number;
   }
 ): Promise<KnxCatalog> {
-  const onProgress = opts?.onProgress ?? (() => {});
-  const concurrency = Math.max(1, Math.min(8, opts?.concurrency ?? 4));
+  const onProgress = opts?.onProgress;
+  post(onProgress, { phase: "load_zip", percent: 2 });
 
-  onProgress({ phase: "load_zip", percent: 2 });
+  const buffer = await file.arrayBuffer();
 
-  const zip = await JSZip.loadAsync(file);
-  onProgress({ phase: "scan_entries", percent: 5 });
+  post(onProgress, { phase: "scan_entries", percent: 5 });
 
-  const xmlNames = Object.keys(zip.files).filter((n) =>
+  const entries: Record<string, Uint8Array> = await new Promise(
+    (resolve, reject) => {
+      unzip(
+        new Uint8Array(buffer),
+        { filter: () => true },
+        (err: Error | null, out: unknown) => {
+          if (err) return reject(err);
+          resolve(out as Record<string, Uint8Array>);
+        }
+      );
+    }
+  );
+
+  const xmlNames = Object.keys(entries).filter((n) =>
     n.toLowerCase().endsWith(".xml")
   );
   const totalFiles = xmlNames.length;
-  onProgress({ phase: "scan_entries", percent: 8, totalFiles });
-
-  let projectName: string | undefined;
-  const gathered: GroupAddress[] = [];
+  post(onProgress, { phase: "scan_entries", percent: 8, totalFiles });
 
   const baseStart = 10;
   const baseEnd = 95;
   let processedFiles = 0;
+  const decoder = new TextDecoder("utf-8");
 
   function updateOverall(fileIndex: number, filePercent: number) {
     const perFileSpan = (baseEnd - baseStart) / Math.max(1, totalFiles);
@@ -244,63 +157,47 @@ export async function parseKnxproj(
     return Math.max(10, Math.min(95, percent));
   }
 
-  await mapWithConcurrency(xmlNames, concurrency, async (name, idx) => {
-    const text = await zip.files[name].async("string", (meta) => {
-      const p = updateOverall(idx, meta.percent ?? 0);
-      onProgress({
-        phase: "extract_xml",
-        percent: p,
-        filename: name,
-        totalFiles,
-        processedFiles,
-        filePercent: meta.percent ?? 0,
-      });
-    });
+  const gathered: GroupAddress[] = [];
+  let projectName: string | undefined;
 
-    onProgress({
-      phase: "parse_xml",
-      percent: updateOverall(idx, 100),
+  for (let i = 0; i < xmlNames.length; i++) {
+    const name = xmlNames[i];
+    post(onProgress, {
+      phase: "extract_xml",
+      percent: updateOverall(i, 0),
       filename: name,
       totalFiles,
       processedFiles,
       filePercent: 100,
     });
 
-    let json: unknown;
-    try {
-      json = parser.parse(text);
-    } catch {
-      processedFiles++;
-      return;
-    }
+    const xml = decoder.decode(entries[name]);
+    const { gas, projectName: pn } = scanGroupAddresses(name, xml);
+    gathered.push(...gas);
+    if (projectName === undefined && pn) projectName = pn;
 
-    if (projectName === undefined) {
-      const pName = findProjectName(json);
-      if (pName) projectName = pName;
-    }
-
-    collectGroupAddresses(json, gathered);
     processedFiles++;
-
-    onProgress({
+    post(onProgress, {
       phase: "parse_xml",
-      percent: updateOverall(idx, 100),
+      percent: updateOverall(i, 100),
       filename: name,
       totalFiles,
       processedFiles,
       filePercent: 100,
     });
-  });
+
+    await Promise.resolve();
+  }
 
   if (!projectName) {
-    const entry = Object.keys(zip.files).find((n) =>
+    const knxEntry = Object.keys(entries).find((n) =>
       n.toLowerCase().endsWith(".knxproj")
     );
-    const topName = entry ? entry.split("/").pop() : undefined;
+    const topName = knxEntry ? knxEntry.split("/").pop() : undefined;
     projectName = topName?.replace(/\.knxproj$/i, "") || "Unknown";
   }
 
-  onProgress({
+  post(onProgress, {
     phase: "build_catalog",
     percent: 96,
     totalFiles,
@@ -311,10 +208,10 @@ export async function parseKnxproj(
   for (const ga of gathered) map.set(`${ga.address}@@${ga.name}`, ga);
 
   const list = Array.from(map.values()).sort((a, b) =>
-    a.address.localeCompare(b.address, undefined, { numeric: true })
+    compareAddress(a.address, b.address)
   );
 
-  onProgress({ phase: "done", percent: 100, totalFiles, processedFiles });
+  post(onProgress, { phase: "done", percent: 100, totalFiles, processedFiles });
 
   return { project_name: projectName ?? null, group_addresses: list };
 }
