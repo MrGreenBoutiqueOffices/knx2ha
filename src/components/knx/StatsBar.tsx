@@ -41,13 +41,13 @@ export default function StatsBar({ summary }: { summary: EntitySummary }) {
           </Badge>
         )}
         <span className="ms-auto text-xs text-muted-foreground">
-          Totaal: {summary.counts.total}
+          Total: {summary.counts.total}
         </span>
       </div>
 
       {Object.keys(summary.sensorsByType).length > 0 && (
         <div className="mb-3 text-xs text-muted-foreground">
-          Sensortypes:&nbsp;
+          Sensor types:&nbsp;
           {Object.entries(summary.sensorsByType)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 8)

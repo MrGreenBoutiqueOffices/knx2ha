@@ -28,21 +28,21 @@ export default function ProgressInfo({
           <div className="text-xs text-muted-foreground">
             {info?.phase === "extract_xml" && info.filename ? (
               <>
-                Lezen: <code>{info.filename.split("/").pop()}</code> (
+                Read: <code>{info.filename.split("/").pop()}</code> (
                 {(info.filePercent ?? 0).toFixed(0)}%) —{" "}
                 {info.processedFiles ?? 0}/{info.totalFiles ?? 0}
               </>
             ) : info?.phase === "parse_xml" && info.filename ? (
               <>
-                Parsen: <code>{info.filename.split("/").pop()}</code> —{" "}
+                Parse: <code>{info.filename.split("/").pop()}</code> —{" "}
                 {info.processedFiles ?? 0}/{info.totalFiles ?? 0}
               </>
             ) : info?.phase === "scan_entries" ? (
-              <>Bestanden inventariseren…</>
+              <>Inventory files…</>
             ) : info?.phase === "build_catalog" ? (
-              <>Catalog samenstellen…</>
+              <>Compile a catalog…</>
             ) : (
-              <>Bezig…</>
+              <>Busy…</>
             )}
           </div>
         </div>

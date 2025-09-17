@@ -44,12 +44,11 @@ export default function UploadDropzone({
       <div className="pointer-events-none flex flex-col items-center gap-2 text-center">
         <UploadCloud className="h-6 w-6 opacity-80" />
         <div className="text-sm">
-          Sleep je <code>.knxproj</code> hierheen of
-          <span className="mx-1 font-medium">klik</span> hieronder om te
-          selecteren.
+          Drag your <code>.knxproj</code> here or
+          <span className="mx-1 font-medium">click</span> below to select
         </div>
         <div className="text-xs text-muted-foreground">
-          Ondersteund: <code>.knxproj</code> (ZIP met XML)
+          Supports: <code>.knxproj</code> (ZIP met XML)
         </div>
       </div>
       <Input
@@ -57,7 +56,7 @@ export default function UploadDropzone({
         accept=".knxproj,application/zip"
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         onChange={(e) => onSelect(e.target.files?.[0] ?? null)}
-        aria-label=".knxproj bestand"
+        aria-label=".knxproj file"
       />
     </div>
   );

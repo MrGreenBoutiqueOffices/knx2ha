@@ -25,7 +25,7 @@ export default function OptionsBar({
     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0">
         <Label className="mb-1 block text-xs text-muted-foreground">
-          Geselecteerd bestand
+          Selected file
         </Label>
         <div className="truncate text-sm">
           {file ? (
@@ -33,9 +33,7 @@ export default function OptionsBar({
               {file.name}
             </Badge>
           ) : (
-            <span className="text-muted-foreground">
-              Geen bestand geselecteerd
-            </span>
+            <span className="text-muted-foreground">No file selected</span>
           )}
         </div>
       </div>
@@ -52,16 +50,25 @@ export default function OptionsBar({
             htmlFor="opt-reserve"
             className="cursor-pointer text-sm leading-none"
           >
-            Filter <code>Reserve</code> uit <code>_unknown</code>
+            Filter <code>Reserve</code> from <code>_unknown</code>
           </Label>
         </div>
       </div>
 
       <div className="flex gap-2 md:justify-end">
-        <Button onClick={onParse} disabled={!file || busy}>
-          {busy ? "Bezig…" : "Parsen"}
+        <Button
+          onClick={onParse}
+          className="cursor-pointer"
+          disabled={!file || busy}
+        >
+          {busy ? "Busy…" : "Parse file"}
         </Button>
-        <Button onClick={onReset} disabled={busy && !file} variant="outline">
+        <Button
+          onClick={onReset}
+          className="cursor-pointer"
+          disabled={busy && !file}
+          variant="outline"
+        >
           <RefreshCw className="mr-2 h-4 w-4" />
           Reset
         </Button>

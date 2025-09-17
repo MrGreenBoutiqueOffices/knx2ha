@@ -46,7 +46,7 @@ export default function CodePanel({
                 size="icon"
                 variant="ghost"
                 className="h-8 w-8"
-                aria-label="Kopieer"
+                aria-label="Copy to clipboard"
                 onClick={handleCopy}
               >
                 {copied ? (
@@ -57,7 +57,7 @@ export default function CodePanel({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left" sideOffset={6}>
-              Kopieer naar klembord
+              Copy to clipboard
             </TooltipContent>
           </Tooltip>
         </div>

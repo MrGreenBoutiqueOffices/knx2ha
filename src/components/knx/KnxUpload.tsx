@@ -70,7 +70,7 @@ export default function KnxUpload() {
     try {
       const cat = await parse(file);
       setCatalog(cat);
-      toast.success("Gereed", {
+      toast.success("Ready", {
         description: `${cat.group_addresses.length} group addresses gevonden.`,
       });
     } catch (e) {
@@ -100,7 +100,7 @@ export default function KnxUpload() {
             <div className="ms-auto flex items-center gap-2">
               {catalog && (
                 <Badge variant="secondary">
-                  {catalog.project_name ?? "Onbekend"}
+                  {catalog.project_name ?? "Unknown"}
                 </Badge>
               )}
               {catalog && (
@@ -111,17 +111,17 @@ export default function KnxUpload() {
             </div>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Parseer een <code>.knxproj</code> lokaal (ZIP → XML → YAML). Niets
-            verlaat je browser.
+            This tool helps you convert your KNX project into a Home Assistant
+            YAML configuration.
           </p>
         </div>
       </div>
 
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle>Upload & opties</CardTitle>
+          <CardTitle>Upload & options</CardTitle>
           <CardDescription>
-            Kies een bestand of sleep het in het vak hieronder.
+            Choose a file or drag it into the box below.
           </CardDescription>
         </CardHeader>
 
@@ -161,8 +161,8 @@ export default function KnxUpload() {
         <CardContent className="pt-6">
           {!catalog ? (
             <p className="text-sm text-muted-foreground">
-              Nog niets geüpload. Sleep een bestand in het vak of klik om te
-              selecteren.
+              Nothing uploaded yet. Drag a file into the box or click to select
+              it.
             </p>
           ) : (
             <>
@@ -170,7 +170,7 @@ export default function KnxUpload() {
                 <div className="text-muted-foreground">
                   Project:{" "}
                   <span className="font-medium text-foreground">
-                    {catalog.project_name ?? "Onbekend"}
+                    {catalog.project_name ?? "Unknown"}
                   </span>
                   <span className="mx-2">•</span>
                   {catalog.group_addresses.length} group addresses
@@ -178,6 +178,7 @@ export default function KnxUpload() {
                 <div className="ms-auto flex gap-2">
                   <Button
                     variant="outline"
+                    className="cursor-pointer"
                     onClick={() =>
                       downloadText("knx_catalog.yaml", catalogYaml)
                     }
@@ -187,6 +188,7 @@ export default function KnxUpload() {
                   </Button>
                   <Button
                     variant="outline"
+                    className="cursor-pointer"
                     onClick={() =>
                       downloadText("knx_homeassistant.yaml", haYaml)
                     }
