@@ -26,11 +26,11 @@ import { toast } from "sonner";
 import { PackageOpen, FileDown } from "lucide-react";
 
 import { downloadText } from "@/lib/utils/download";
-import UploadDropzone from "./UploadDropzone";
-import OptionsBar from "./OptionsBar";
-import ProgressInfo from "./ProgressInfo";
-import StatsBar from "./StatsBar";
-import CodePanel from "./CodePanel";
+import UploadDropzone from "./knx/UploadDropzone";
+import OptionsBar from "./knx/OptionsBar";
+import ProgressInfo from "./knx/ProgressInfo";
+import StatsBar from "./knx/StatsBar";
+import CodePanel from "./knx/CodePanel";
 
 export default function KnxUpload() {
   const { parse, busy, progress, progressInfo, error } = useKnxWorker();

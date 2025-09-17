@@ -1,22 +1,6 @@
 import { unzip } from "fflate";
 import type { GroupAddress, KnxCatalog } from "../types";
-
-export type ParsePhase =
-  | "load_zip"
-  | "scan_entries"
-  | "extract_xml"
-  | "parse_xml"
-  | "build_catalog"
-  | "done";
-
-export interface ParseProgress {
-  phase: ParsePhase;
-  percent: number;
-  totalFiles?: number;
-  processedFiles?: number;
-  filename?: string;
-  filePercent?: number;
-}
+import { ParseProgress } from "../types/parse";
 
 function decodeGaIntToTriple(n: number): string {
   const main = (n >> 11) & 0x1f; // 5 bits
@@ -185,7 +169,6 @@ export async function parseKnxproj(
       processedFiles,
       filePercent: 100,
     });
-
   }
 
   if (!projectName) {
