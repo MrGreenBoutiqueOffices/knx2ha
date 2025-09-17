@@ -4,6 +4,12 @@ import { Progress } from "@/components/ui/progress";
 import { Bug } from "lucide-react";
 import type { ParseProgress } from "@/lib/knx/parse";
 
+function basename(path?: string) {
+  if (!path) return "";
+  const idx = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return idx >= 0 ? path.slice(idx + 1) : path;
+}
+
 export default function ProgressInfo({
   busy,
   progress,
@@ -15,34 +21,43 @@ export default function ProgressInfo({
   info: ParseProgress | null;
   error: string | null;
 }) {
+  const pct = Number.isFinite(progress)
+    ? Math.max(0, Math.min(100, Math.round(progress)))
+    : 0;
+
   return (
     <>
       {busy && (
-        <div className="space-y-1">
+        <div className="space-y-1" aria-live="polite">
           <div className="flex items-center gap-3">
-            <Progress value={progress} className="h-2 w-full" />
+            <Progress value={pct} className="h-2 w-full" />
             <span className="text-xs tabular-nums text-muted-foreground">
-              {Math.round(progress)}%
+              {pct}%
             </span>
           </div>
+
           <div className="text-xs text-muted-foreground">
-            {info?.phase === "extract_xml" && info.filename ? (
+            {info?.phase === "load_zip" ? (
+              <>Loading zip…</>
+            ) : info?.phase === "scan_entries" ? (
+              <>Scanning entries…</>
+            ) : info?.phase === "extract_xml" && info.filename ? (
               <>
-                Read: <code>{info.filename.split("/").pop()}</code> (
+                Reading: <code>{basename(info.filename)}</code> (
                 {(info.filePercent ?? 0).toFixed(0)}%) —{" "}
                 {info.processedFiles ?? 0}/{info.totalFiles ?? 0}
               </>
             ) : info?.phase === "parse_xml" && info.filename ? (
               <>
-                Parse: <code>{info.filename.split("/").pop()}</code> —{" "}
+                Parsing: <code>{basename(info.filename)}</code> —{" "}
                 {info.processedFiles ?? 0}/{info.totalFiles ?? 0}
               </>
-            ) : info?.phase === "scan_entries" ? (
-              <>Inventory files…</>
             ) : info?.phase === "build_catalog" ? (
-              <>Compile a catalog…</>
+              <>Building catalog…</>
+            ) : info?.phase === "done" ? (
+              <>Done.</>
             ) : (
-              <>Busy…</>
+              <>Working…</>
             )}
           </div>
         </div>

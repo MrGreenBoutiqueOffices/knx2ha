@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { KnxCatalog } from "@/lib/knx/types";
+import type { KnxCatalog } from "@/lib/types";
 import {
   toCatalogYaml,
   toHomeAssistantYaml,
@@ -33,17 +33,12 @@ import StatsBar from "./StatsBar";
 import CodePanel from "./CodePanel";
 
 export default function KnxUpload() {
-  const {
-    parse,
-    busy,
-    progress,
-    progressInfo,
-    error: workerError,
-  } = useKnxWorker(4);
+  const { parse, busy, progress, progressInfo, error } = useKnxWorker();
 
   const [file, setFile] = useState<File | null>(null);
   const [catalog, setCatalog] = useState<KnxCatalog | null>(null);
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
+  const [dzKey, setDzKey] = useState(0);
 
   const entities = useMemo(
     () =>
@@ -71,7 +66,7 @@ export default function KnxUpload() {
       const cat = await parse(file);
       setCatalog(cat);
       toast.success("Ready", {
-        description: `${cat.group_addresses.length} group addresses founded.`,
+        description: `${cat.group_addresses.length} group addresses found.`,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not parse the file.";
@@ -82,6 +77,7 @@ export default function KnxUpload() {
   function handleReset() {
     setFile(null);
     setCatalog(null);
+    setDzKey((k) => k + 1);
   }
 
   return (
@@ -125,7 +121,7 @@ export default function KnxUpload() {
         </CardHeader>
 
         <CardContent className="space-y-5">
-          <UploadDropzone onSelect={setFile} />
+          <UploadDropzone key={dzKey} onSelect={setFile} />
 
           <OptionsBar
             file={file}
@@ -140,7 +136,7 @@ export default function KnxUpload() {
             busy={busy}
             progress={progress}
             info={progressInfo}
-            error={workerError}
+            error={error}
           />
         </CardContent>
 

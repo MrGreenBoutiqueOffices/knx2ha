@@ -11,21 +11,34 @@ export default function UploadDropzone({
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const dropRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragging(false);
-    const f = e.dataTransfer.files?.[0];
-    onSelect(f ?? null);
+  function commit(file: File | null) {
+    onSelect(file);
+    if (inputRef.current) inputRef.current.value = "";
   }
 
-  function onDragOver(e: React.DragEvent) {
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const f = e.dataTransfer.files?.[0] ?? null;
+    commit(f);
+  }
+
+  function onDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
     if (!isDragging) setIsDragging(true);
   }
 
-  function onDragLeave(e: React.DragEvent) {
+  function onDragLeave(e: React.DragEvent<HTMLDivElement>) {
     if (e.currentTarget === dropRef.current) setIsDragging(false);
+  }
+
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    commit(f);
   }
 
   return (
@@ -51,11 +64,13 @@ export default function UploadDropzone({
           Supports: <code>.knxproj</code> (ZIP met XML)
         </div>
       </div>
+
       <Input
+        ref={inputRef}
         type="file"
         accept=".knxproj,application/zip"
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        onChange={(e) => onSelect(e.target.files?.[0] ?? null)}
+        onChange={onChange}
         aria-label=".knxproj file"
       />
     </div>
