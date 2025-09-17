@@ -47,7 +47,7 @@ function normalizeDptToDot(dpt?: string): string | undefined {
   return out;
 }
 
-/** ====================== LIGHT AGGREGATIE ====================== */
+/** ====================== LIGHT AGGREGATE ====================== */
 export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   const byBase = new Map<string, LightAggregate>();
 
@@ -83,7 +83,7 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   );
 }
 
-/** ====================== SWITCH AGGREGATIE ====================== */
+/** ====================== SWITCH AGGREGATE ====================== */
 function isStatusName(name: string): boolean {
   return STATUS_RE.test(name);
 }
@@ -242,6 +242,153 @@ export function dptToSensorType(
   if (norm === "12") return DPT_TO_HA["12"];
 
   return fallbackTypeFromName(name);
+}
+
+/** ====================== COVER AGGREGATE ====================== */
+const RE_COVER_WORDS =
+  /\b(rolluik|jaloezie|lamel|screen|blind|shutter|cover|gordijn|raam|schuifdeur|schuifdeuren|deur|door)\b/i;
+const RE_STATUS2 = /\b(status|state|feedback|actual|istwert)\b/i;
+const RE_POS = /\b(pos(ition)?|positie|stand)\b/i;
+const RE_ANGLE = /\b(angle|tilt|lamel|hoek)\b/i;
+const RE_STOP = /\bstop\b/i;
+const RE_SHORT = /\b(short|step|stap|kort)\b/i;
+const RE_LONG = /\b(long|lang|up\/?down|omhoog|omlaag|open|close|sluit)\b/i;
+const RE_INVERT = /\b(invert|omgekeerd|inverse)\b/i;
+
+function normalizeDptToPair(dpt?: string): string | null {
+  if (!dpt) return null;
+  let s = dpt
+    .trim()
+    .toLowerCase()
+    .replace(/^dpst?-/, "");
+  s = s.replace(/\./g, "-");
+  const m = s.match(/^(\d+)-0*(\d+)$/);
+  if (m) return `${parseInt(m[1], 10)}-${parseInt(m[2], 10)}`;
+  if (/^\d+-\d+$/.test(s)) return s;
+  return null;
+}
+
+function coverBaseName(name: string): string {
+  let n = name.toLowerCase();
+  n = n
+    .replace(RE_STATUS2, "")
+    .replace(RE_POS, "")
+    .replace(RE_ANGLE, "")
+    .replace(RE_STOP, "")
+    .replace(RE_SHORT, "")
+    .replace(RE_LONG, "");
+  n = n.replace(/\s+/g, " ").trim();
+  return n || name.toLowerCase();
+}
+
+export interface CoverAggregate {
+  name: string;
+  consumedIds: Set<string>;
+  move_long_address?: string;
+  move_short_address?: string;
+  stop_address?: string;
+  position_address?: string;
+  position_state_address?: string;
+  angle_address?: string;
+  angle_state_address?: string;
+  invert_position?: boolean;
+  invert_angle?: boolean;
+}
+
+export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
+  const covers = new Map<string, CoverAggregate>();
+  const hasCommand = new Set<string>();
+
+  for (const ga of gas) {
+    const d = normalizeDptToPair(ga.dpt ?? "");
+    const n = ga.name;
+    const key = coverBaseName(n);
+
+    const isCommand =
+      d === "1-7" ||
+      d === "1-8" ||
+      d === "1-10" ||
+      RE_STOP.test(n) ||
+      RE_LONG.test(n) ||
+      RE_SHORT.test(n);
+
+    if (isCommand || RE_COVER_WORDS.test(n)) {
+      hasCommand.add(key);
+      let agg = covers.get(key);
+      if (!agg) {
+        agg = { name: n, consumedIds: new Set<string>() };
+        covers.set(key, agg);
+      }
+      if (d === "1-8") {
+        if (!agg.move_long_address) agg.move_long_address = ga.address;
+        agg.consumedIds.add(ga.id);
+      } else if (d === "1-7") {
+        if (!agg.move_short_address) agg.move_short_address = ga.address;
+        agg.consumedIds.add(ga.id);
+      } else if (d === "1-10") {
+        if (RE_STOP.test(n)) {
+          if (!agg.stop_address) agg.stop_address = ga.address;
+        } else {
+          if (!agg.move_long_address) agg.move_long_address = ga.address;
+        }
+        agg.consumedIds.add(ga.id);
+      }
+      if (RE_INVERT.test(n)) agg.invert_position = true;
+    }
+  }
+
+  for (const ga of gas) {
+    const d = normalizeDptToPair(ga.dpt ?? "");
+    const n = ga.name;
+    const key = coverBaseName(n);
+
+    const eligible = hasCommand.has(key) || RE_COVER_WORDS.test(n);
+
+    if (!eligible) continue;
+
+    let agg = covers.get(key);
+    if (!agg) {
+      agg = { name: n, consumedIds: new Set<string>() };
+      covers.set(key, agg);
+    }
+
+    if (d === "5-1" || RE_POS.test(n)) {
+      if (RE_STATUS2.test(n)) {
+        if (!agg.position_state_address)
+          agg.position_state_address = ga.address;
+      } else {
+        if (!agg.position_address) agg.position_address = ga.address;
+      }
+      agg.consumedIds.add(ga.id);
+      continue;
+    }
+
+    if (d === "5-3" || RE_ANGLE.test(n)) {
+      if (RE_STATUS2.test(n)) {
+        if (!agg.angle_state_address) agg.angle_state_address = ga.address;
+      } else {
+        if (!agg.angle_address) agg.angle_address = ga.address;
+      }
+      agg.consumedIds.add(ga.id);
+      continue;
+    }
+
+    if (RE_INVERT.test(n)) {
+      if (RE_ANGLE.test(n)) agg.invert_angle = true;
+      else agg.invert_position = true;
+    }
+  }
+
+  return Array.from(covers.values()).filter(
+    (a) =>
+      a.move_long_address ||
+      a.move_short_address ||
+      a.stop_address ||
+      a.position_address ||
+      a.position_state_address ||
+      a.angle_address ||
+      a.angle_state_address
+  );
 }
 
 /** ====================== Fallback mapping for single GA's ====================== */
