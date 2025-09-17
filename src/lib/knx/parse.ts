@@ -1,29 +1,13 @@
 import { unzip } from "fflate";
 import type { GroupAddress, KnxCatalog } from "../types";
+import { ParseProgress } from "../types/parse";
 
-export type ParsePhase =
-  | "load_zip"
-  | "scan_entries"
-  | "extract_xml"
-  | "parse_xml"
-  | "build_catalog"
-  | "done";
-
-export interface ParseProgress {
-  phase: ParsePhase;
-  percent: number;
-  totalFiles?: number;
-  processedFiles?: number;
-  filename?: string;
-  filePercent?: number;
-}
-
-function decodeGaIntToTriple(n: number): string {
-  const main = (n >> 11) & 0x1f; // 5 bits
-  const middle = (n >> 8) & 0x07; // 3 bits
-  const sub = n & 0xff; // 8 bits
-  return `${main}/${middle}/${sub}`;
-}
+const RE_PROJECT = /<(?:\w+:)?Project\b[^>]*\bName="([^"]+)"/i;
+const RE_PROJ_INFO_1 =
+  /<(?:\w+:)?ProjectInformation\b[^>]*\bProjectName="([^"]+)"/i;
+const RE_PROJ_INFO_2 = /<(?:\w+:)?ProjectInformation\b[^>]*\bName="([^"]+)"/i;
+const RE_GROUP_TAG_G = /<(?::?\w+:)?GroupAddress\b([^>]*)>/g;
+const RE_ATTR_G = /\b([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*"([^"]*)"/g;
 
 function post(
   onProgress: ((p: ParseProgress) => void) | undefined,
@@ -32,12 +16,12 @@ function post(
   if (onProgress) onProgress(p);
 }
 
-const RE_PROJECT = /<(?:\w+:)?Project\b[^>]*\bName="([^"]+)"/i;
-const RE_PROJ_INFO_1 =
-  /<(?:\w+:)?ProjectInformation\b[^>]*\bProjectName="([^"]+)"/i;
-const RE_PROJ_INFO_2 = /<(?:\w+:)?ProjectInformation\b[^>]*\bName="([^"]+)"/i;
-const RE_GROUP_TAG = /<(?::?\w+:)?GroupAddress\b([^>]*)>/gi;
-const RE_ATTR = /\b([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*"([^"]*)"/g;
+function decodeGaIntToTriple(n: number): string {
+  const main = (n >> 11) & 0x1f; // 5 bits
+  const middle = (n >> 8) & 0x07; // 3 bits
+  const sub = n & 0xff; // 8 bits
+  return `${main}/${middle}/${sub}`;
+}
 
 function normalizeAddressFromAttrs(
   attrs: Record<string, string | undefined>
@@ -61,54 +45,91 @@ function normalizeAddressFromAttrs(
   return undefined;
 }
 
+const ADDRESS_KEY_CACHE = new Map<string, [number, number, number]>();
 function addressKey(a: string): [number, number, number] {
-  const [m, mi, s] = a.split("/").map((x) => parseInt(x, 10));
-  return [m || 0, mi || 0, s || 0];
+  let k = ADDRESS_KEY_CACHE.get(a);
+  if (k) return k;
+  const [m, mi, s] = a.split("/").map((x) => parseInt(x, 10) || 0) as [
+    number,
+    number,
+    number
+  ];
+  ADDRESS_KEY_CACHE.set(a, (k = [m, mi, s]));
+  return k;
 }
-
 function compareAddress(a: string, b: string): number {
   const A = addressKey(a);
   const B = addressKey(b);
   return A[0] - B[0] || A[1] - B[1] || A[2] - B[2];
 }
 
-function scanGroupAddresses(
+/** ---------- Lazy/streaming XML-scan ---------- */
+function scanGroupAddressesStream(
   filename: string,
-  xml: string
+  u8: Uint8Array,
+  chunkSize = 128 * 1024,
+  tailKeep = 2048
 ): { gas: GroupAddress[]; projectName: string | null } {
   const gas: GroupAddress[] = [];
   let projectName: string | null = null;
 
-  let m = RE_PROJECT.exec(xml);
-  if (m) projectName = m[1];
-  if (!projectName) {
-    m = RE_PROJ_INFO_1.exec(xml) || RE_PROJ_INFO_2.exec(xml);
-    if (m) projectName = m[1];
+  const decoder = new TextDecoder("utf-8");
+  let buf = "";
+
+  const processBuffer = (final: boolean) => {
+    if (!projectName) {
+      let m = RE_PROJECT.exec(buf);
+      if (m) projectName = m[1];
+      if (!projectName) {
+        m = RE_PROJ_INFO_1.exec(buf) || RE_PROJ_INFO_2.exec(buf);
+        if (m) projectName = m[1];
+      }
+    }
+
+    RE_GROUP_TAG_G.lastIndex = 0;
+    let tagMatch: RegExpExecArray | null;
+    while ((tagMatch = RE_GROUP_TAG_G.exec(buf)) !== null) {
+      const attrStr = tagMatch[1];
+
+      const attrs: Record<string, string | undefined> = {};
+      RE_ATTR_G.lastIndex = 0;
+      let kv: RegExpExecArray | null;
+      while ((kv = RE_ATTR_G.exec(attrStr)) !== null) {
+        attrs[kv[1]] = kv[2];
+      }
+
+      const address = normalizeAddressFromAttrs(attrs);
+      if (!address) continue;
+
+      const id = attrs["Id"] || attrs["ID"] || `${filename}#${gas.length}`;
+      const name =
+        attrs["Name"] || attrs["Text"] || attrs["Description"] || "Unknown";
+      const dpt =
+        attrs["DPTs"] ||
+        attrs["DatapointType"] ||
+        attrs["Datapoint"] ||
+        undefined;
+      const description = attrs["Description"] || undefined;
+
+      gas.push({ id, name, address, dpt, description });
+    }
+
+    if (!final) {
+      buf = buf.slice(Math.max(0, buf.length - tailKeep));
+    } else {
+      buf = "";
+    }
+  };
+
+  for (let off = 0; off < u8.length; off += chunkSize) {
+    const end = Math.min(off + chunkSize, u8.length);
+    const text = decoder.decode(u8.subarray(off, end), {
+      stream: end < u8.length,
+    });
+    buf += text;
+    processBuffer(false);
   }
-
-  let tagMatch: RegExpExecArray | null;
-  while ((tagMatch = RE_GROUP_TAG.exec(xml)) !== null) {
-    const attrStr = tagMatch[1];
-    const attrs: Record<string, string | undefined> = {};
-    RE_ATTR.lastIndex = 0;
-    let kv: RegExpExecArray | null;
-    while ((kv = RE_ATTR.exec(attrStr)) !== null) attrs[kv[1]] = kv[2];
-
-    const address = normalizeAddressFromAttrs(attrs);
-    if (!address) continue;
-
-    const id = attrs["Id"] || attrs["ID"] || `${filename}#${gas.length}`;
-    const name =
-      attrs["Name"] || attrs["Text"] || attrs["Description"] || "Unknown";
-    const dpt =
-      attrs["DPTs"] ||
-      attrs["DatapointType"] ||
-      attrs["Datapoint"] ||
-      undefined;
-    const description = attrs["Description"] || undefined;
-
-    gas.push({ id, name, address, dpt, description });
-  }
+  processBuffer(true);
 
   return { gas, projectName };
 }
@@ -149,7 +170,6 @@ export async function parseKnxproj(
   const baseStart = 10;
   const baseEnd = 95;
   let processedFiles = 0;
-  const decoder = new TextDecoder("utf-8");
 
   function updateOverall(fileIndex: number, filePercent: number) {
     const perFileSpan = (baseEnd - baseStart) / Math.max(1, totalFiles);
@@ -162,6 +182,7 @@ export async function parseKnxproj(
 
   for (let i = 0; i < xmlNames.length; i++) {
     const name = xmlNames[i];
+
     post(onProgress, {
       phase: "extract_xml",
       percent: updateOverall(i, 0),
@@ -171,8 +192,10 @@ export async function parseKnxproj(
       filePercent: 100,
     });
 
-    const xml = decoder.decode(entries[name]);
-    const { gas, projectName: pn } = scanGroupAddresses(name, xml);
+    const { gas, projectName: pn } = scanGroupAddressesStream(
+      name,
+      entries[name]
+    );
     gathered.push(...gas);
     if (projectName === undefined && pn) projectName = pn;
 
@@ -185,7 +208,6 @@ export async function parseKnxproj(
       processedFiles,
       filePercent: 100,
     });
-
   }
 
   if (!projectName) {
@@ -203,6 +225,7 @@ export async function parseKnxproj(
     processedFiles,
   });
 
+  ADDRESS_KEY_CACHE.clear();
   const map = new Map<string, GroupAddress>();
   for (const ga of gathered) map.set(`${ga.address}@@${ga.name}`, ga);
 
