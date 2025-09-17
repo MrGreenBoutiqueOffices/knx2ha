@@ -24,14 +24,14 @@ export default function CodePanel({
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(value);
-      toast.success("Gekopieerd", {
-        description: "YAML is naar het klembord gekopieerd.",
+      toast.success("Copied", {
+        description: "YAML has been copied to the clipboard.",
       });
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } catch {
-      toast.error("Kopiëren mislukt", {
-        description: "Kon de tekst niet kopiëren.",
+      toast.error("Copy failed", {
+        description: "Could not copy text.",
       });
     }
   }

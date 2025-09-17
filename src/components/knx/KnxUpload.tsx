@@ -71,12 +71,11 @@ export default function KnxUpload() {
       const cat = await parse(file);
       setCatalog(cat);
       toast.success("Ready", {
-        description: `${cat.group_addresses.length} group addresses gevonden.`,
+        description: `${cat.group_addresses.length} group addresses founded.`,
       });
     } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : "Kon het bestand niet parsen.";
-      toast.error("Fout bij parsen", { description: msg });
+      const msg = e instanceof Error ? e.message : "Could not parse the file.";
+      toast.error("Parsing error", { description: msg });
     }
   }
 
@@ -201,8 +200,12 @@ export default function KnxUpload() {
 
               <Tabs defaultValue="ha" className="w-full">
                 <TabsList>
-                  <TabsTrigger value="ha">Home Assistant YAML</TabsTrigger>
-                  <TabsTrigger value="catalog">Catalog YAML</TabsTrigger>
+                  <TabsTrigger className="cursor-pointer" value="ha">
+                    Home Assistant YAML
+                  </TabsTrigger>
+                  <TabsTrigger className="cursor-pointer" value="catalog">
+                    Catalog YAML
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="ha" className="mt-3">
