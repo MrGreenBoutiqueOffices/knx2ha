@@ -297,7 +297,7 @@ export async function parseKnxproj(
       n.toLowerCase().endsWith(".knxproj")
     );
     const topName = entry ? entry.split("/").pop() : undefined;
-    projectName = topName?.replace(/\.knxproj$/i, "") || "Onbekend";
+    projectName = topName?.replace(/\.knxproj$/i, "") || "Unknown";
   }
 
   onProgress({

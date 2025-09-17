@@ -25,7 +25,6 @@ export interface HaEntities {
   unknowns: UnknownEntity[];
 }
 
-/** ---------- gedeelde builder (zodat UI ook stats kan opvragen) ---------- */
 export function buildHaEntities(
   catalog: KnxCatalog,
   opts: ExportOptions = {}
@@ -37,10 +36,9 @@ export function buildHaEntities(
   const covers: HaCover[] = [];
   const unknowns: UnknownEntity[] = [];
 
-  // 1) Aggregaties
   const laAggs = buildLaLightAggregates(catalog.group_addresses);
   for (const a of laAggs) {
-    if (!a.on_off) continue; // HA light verwacht address
+    if (!a.on_off) continue;
     const entry: HaLight = { name: a.name, address: a.on_off };
     if (a.on_off_state) entry.state_address = a.on_off_state;
     if (a.brightness) entry.brightness_address = a.brightness;
@@ -52,11 +50,10 @@ export function buildHaEntities(
   for (const s of switchAggs) {
     const entry: HaSwitch = { name: s.name, address: s.address! };
     if (s.state_address) entry.state_address = s.state_address;
-    else entry.respond_to_read = true; // geen state? laat HA antwoorden op read
+    else entry.respond_to_read = true;
     switches.push(entry);
   }
 
-  // 2) Rest mappen (zonder dubbelingen)
   const consumed = collectConsumedIds(laAggs, switchAggs);
   for (const ga of catalog.group_addresses) {
     if (consumed.has(ga.id)) continue;
@@ -84,7 +81,6 @@ export function buildHaEntities(
     }
   }
 
-  // 3) Unknowns opschonen (optioneel)
   const finalUnknowns = opts.dropReserveFromUnknown
     ? unknowns.filter((x) => x.name.trim().toLowerCase() !== "reserve")
     : unknowns;
@@ -99,7 +95,7 @@ export function buildHaEntities(
   };
 }
 
-/** ---------- YAML exporter gebruikt nu de gedeelde builder ---------- */
+/** ---------- YAML exporter ---------- */
 export function toHomeAssistantYaml(
   catalog: KnxCatalog,
   opts: ExportOptions = {}
@@ -117,7 +113,7 @@ export function toHomeAssistantYaml(
   return YAML.stringify({ knx }, { aliasDuplicateObjects: false });
 }
 
-/** ---------- Catalog YAML ongewijzigd ---------- */
+/** ---------- Catalog YAML ---------- */
 export function toCatalogYaml(catalog: KnxCatalog): string {
   const data = {
     project_name: catalog.project_name ?? null,
@@ -132,7 +128,6 @@ export function toCatalogYaml(catalog: KnxCatalog): string {
   return YAML.stringify(data, { aliasDuplicateObjects: false });
 }
 
-/** ---------- Samenvatting voor UI ---------- */
 export interface EntitySummary {
   counts: {
     switch: number;

@@ -17,16 +17,15 @@ const STATUS_RE = /\bstatus\b/i;
 const NAME_STRIP_RE =
   /\b(status|aan\/?uit|aan|uit|schakel|switch|cmd|command)\b/gi;
 
-const DPT_DOT_CACHE = new Map<string, string | undefined>(); // "DPST-9-1" -> "9.001" etc.
+const DPT_DOT_CACHE = new Map<string, string | undefined>();
 
-/** Normaliseer naar "main.sub" (bv. "9.001"). Bewaart resultaat in cache. */
 function normalizeDptToDot(dpt?: string): string | undefined {
   if (!dpt) return undefined;
   const key = dpt;
   if (DPT_DOT_CACHE.has(key)) return DPT_DOT_CACHE.get(key);
 
   let s = dpt.trim().toLowerCase();
-  s = s.replace(/^dpst?-/, ""); // "DPST-9-1" -> "9-1"
+  s = s.replace(/^dpst?-/, "");
   s = s.replace(/_/g, "-").replace(/\s+/g, "");
   let out: string | undefined;
 
@@ -97,7 +96,7 @@ function normalizeBaseName(name: string): string {
 
 export interface SwitchAggregate {
   name: string;
-  address?: string; // verplicht voor HA switch
+  address?: string;
   state_address?: string;
   consumedIds: Set<string>;
 }
@@ -120,7 +119,7 @@ export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
     } else {
       if (!agg.address) {
         agg.address = ga.address;
-        agg.name = ga.name; // gebruik command-naam
+        agg.name = ga.name;
       }
       agg.consumedIds.add(ga.id);
     }
@@ -128,7 +127,6 @@ export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
   return Array.from(byBase.values()).filter((a) => !!a.address);
 }
 
-/** ====================== HULP: verzamelde ids ====================== */
 export function collectConsumedIds(
   ...aggs: Array<{ consumedIds: Set<string> }[]>
 ): Set<string> {
@@ -138,10 +136,7 @@ export function collectConsumedIds(
   return consumed;
 }
 
-/** ====================== SENSOR TYPE-MAPPING ======================
- *  Bron: HA KNX → Sensor → "Value types".
- *  We normaliseren DPT en mappen naar string-type. Valt terug op naam.
- */
+/** ====================== SENSOR TYPE-MAPPING ====================== */
 const DPT_TO_HA: Record<string, string> = {
   // 5.*
   "5": "1byte_unsigned",
@@ -232,7 +227,6 @@ function fallbackTypeFromName(name?: string): string | undefined {
   return undefined;
 }
 
-/** Exporteerbaar voor UI-annotaties (units). */
 export function dptToSensorType(
   dpt?: string,
   name?: string
@@ -250,7 +244,7 @@ export function dptToSensorType(
   return fallbackTypeFromName(name);
 }
 
-/** ====================== Fallback mapping voor losse GA's ====================== */
+/** ====================== Fallback mapping for single GA's ====================== */
 export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   const t = guessEntityType(ga.dpt, ga.name);
 
