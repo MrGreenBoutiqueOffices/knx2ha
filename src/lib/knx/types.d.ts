@@ -57,6 +57,12 @@ export interface HaCover {
   stop_address?: string;
   position_address?: string;
   position_state_address?: string;
+  angle_address?: string;
+  angle_state_address?: string;
+  invert_position?: boolean;
+  invert_angle?: boolean;
+  travelling_time_up?: number;
+  travelling_time_down?: number;
 }
 
 export interface UnknownEntity {

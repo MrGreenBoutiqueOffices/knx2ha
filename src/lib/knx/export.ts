@@ -12,6 +12,7 @@ import {
 import {
   buildLaLightAggregates,
   buildSwitchAggregates,
+  buildCoverAggregates,
   collectConsumedIds,
   mapSingleGaToEntity,
 } from "./aggregate";
@@ -54,11 +55,28 @@ export function buildHaEntities(
     switches.push(entry);
   }
 
-  const consumed = collectConsumedIds(laAggs, switchAggs);
+  const coverAggs = buildCoverAggregates(catalog.group_addresses);
+  for (const c of coverAggs) {
+    const entry: HaCover = { name: c.name };
+    if (c.move_long_address) entry.move_long_address = c.move_long_address;
+    if (c.move_short_address) entry.move_short_address = c.move_short_address;
+    if (c.stop_address) entry.stop_address = c.stop_address;
+    if (c.position_address) entry.position_address = c.position_address;
+    if (c.position_state_address)
+      entry.position_state_address = c.position_state_address;
+    if (c.angle_address) entry.angle_address = c.angle_address;
+    if (c.angle_state_address)
+      entry.angle_state_address = c.angle_state_address;
+    if (c.invert_position) entry.invert_position = true;
+    if (c.invert_angle) entry.invert_angle = true;
+    covers.push(entry);
+  }
+
+  const consumed = collectConsumedIds(laAggs, switchAggs, coverAggs);
   for (const ga of catalog.group_addresses) {
     if (consumed.has(ga.id)) continue;
-    const mapped = mapSingleGaToEntity(ga);
 
+    const mapped = mapSingleGaToEntity(ga);
     switch (mapped.domain) {
       case "switch":
         switches.push(mapped.payload);
@@ -95,7 +113,6 @@ export function buildHaEntities(
   };
 }
 
-/** ---------- YAML exporter ---------- */
 export function toHomeAssistantYaml(
   catalog: KnxCatalog,
   opts: ExportOptions = {}
@@ -113,7 +130,6 @@ export function toHomeAssistantYaml(
   return YAML.stringify({ knx }, { aliasDuplicateObjects: false });
 }
 
-/** ---------- Catalog YAML ---------- */
 export function toCatalogYaml(catalog: KnxCatalog): string {
   const data = {
     project_name: catalog.project_name ?? null,
