@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { KnxCatalog } from "@/lib/knx/types";
+import type { KnxCatalog } from "@/lib/types";
 import {
   toCatalogYaml,
   toHomeAssistantYaml,

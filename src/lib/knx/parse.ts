@@ -2,7 +2,7 @@
 
 import JSZip from "jszip";
 import { XMLParser } from "fast-xml-parser";
-import { GroupAddress, KnxCatalog } from "./types";
+import { GroupAddress, KnxCatalog } from "../types";
 import {
   UnknownRecord,
   isObject,

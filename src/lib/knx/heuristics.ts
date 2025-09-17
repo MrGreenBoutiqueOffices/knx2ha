@@ -1,4 +1,4 @@
-import type { HAType } from "./types";
+import type { HAType } from "../types";
 
 function isStatusName(name: string): boolean {
   return /\bstatus\b/i.test(name);

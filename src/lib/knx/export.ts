@@ -8,7 +8,7 @@ import {
   HaSensor,
   HaCover,
   UnknownEntity,
-} from "./types";
+} from "../types";
 import {
   buildLaLightAggregates,
   buildSwitchAggregates,
