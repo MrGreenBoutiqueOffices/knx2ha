@@ -40,6 +40,9 @@ export default function KnxUpload() {
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
   const [dzKey, setDzKey] = useState(0);
 
+  const projectName = catalog?.project_name ?? "Unknown";
+  const groupAddressCount = catalog?.group_addresses.length ?? 0;
+
   const entities = useMemo(
     () =>
       catalog ? buildHaEntities(catalog, { dropReserveFromUnknown }) : null,
@@ -61,7 +64,7 @@ export default function KnxUpload() {
   );
 
   async function handleParse() {
-    if (!file) return;
+    if (!file || busy) return;
     try {
       const cat = await parse(file);
       setCatalog(cat);
@@ -71,6 +74,7 @@ export default function KnxUpload() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not parse the file.";
       toast.error("Parsing error", { description: msg });
+      setCatalog(null);
     }
   }
 
@@ -94,14 +98,10 @@ export default function KnxUpload() {
             </div>
             <div className="ms-auto flex items-center gap-2">
               {catalog && (
-                <Badge variant="secondary">
-                  {catalog.project_name ?? "Unknown"}
-                </Badge>
+                <Badge variant="secondary">{projectName}</Badge>
               )}
               {catalog && (
-                <Badge variant="outline">
-                  {catalog.group_addresses.length} GA&apos;s
-                </Badge>
+                <Badge variant="outline">{groupAddressCount} GA&apos;s</Badge>
               )}
             </div>
           </div>
@@ -164,11 +164,9 @@ export default function KnxUpload() {
               <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
                 <div className="text-muted-foreground">
                   Project:{" "}
-                  <span className="font-medium text-foreground">
-                    {catalog.project_name ?? "Unknown"}
-                  </span>
+                  <span className="font-medium text-foreground">{projectName}</span>
                   <span className="mx-2">•</span>
-                  {catalog.group_addresses.length} group addresses
+                  {groupAddressCount} group addresses
                 </div>
                 <div className="ms-auto flex gap-2">
                   <Button

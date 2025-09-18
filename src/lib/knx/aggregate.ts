@@ -10,42 +10,12 @@ import {
   UnknownEntity,
 } from "../types";
 import { isLA, guessEntityType } from "./heuristics";
-import { parseAddress } from "./utils";
+import { parseAddress, normalizeDptToDot, normalizeDptToHyphen } from "./utils";
 
 /** ====================== MICRO OPTS / CACHES ====================== */
 const STATUS_RE = /\bstatus\b/i;
 const NAME_STRIP_RE =
   /\b(status|aan\/?uit|aan|uit|schakel|switch|cmd|command)\b/gi;
-
-const DPT_DOT_CACHE = new Map<string, string | undefined>();
-
-function normalizeDptToDot(dpt?: string): string | undefined {
-  if (!dpt) return undefined;
-  const key = dpt;
-  if (DPT_DOT_CACHE.has(key)) return DPT_DOT_CACHE.get(key);
-
-  let s = dpt.trim().toLowerCase();
-  s = s.replace(/^dpst?-/, "");
-  s = s.replace(/_/g, "-").replace(/\s+/g, "");
-  let out: string | undefined;
-
-  if (s.includes(".")) {
-    const [m, sub] = s.split(".", 2);
-    const mm = String(parseInt(m, 10));
-    const ss = sub ? sub.replace(/^0+/, "") : "";
-    out = ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
-  } else if (s.includes("-")) {
-    const [m, sub] = s.split("-", 2);
-    const mm = String(parseInt(m, 10));
-    const ss = sub ? sub.replace(/^0+/, "") : "";
-    out = ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
-  } else if (/^\d+$/.test(s)) {
-    out = String(parseInt(s, 10));
-  }
-
-  DPT_DOT_CACHE.set(key, out);
-  return out;
-}
 
 /** ====================== LIGHT AGGREGATE ====================== */
 export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
@@ -63,15 +33,15 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
       byBase.set(base, agg);
     }
 
-    const dpt = (ga.dpt ?? "").toLowerCase();
-    if (/^dpst?-1-1$/.test(dpt)) {
+    const dpt = normalizeDptToHyphen(ga.dpt);
+    if (dpt === "1-1") {
       if (parts.middle === 1) agg.on_off = ga.address;
       if (parts.middle === 5) agg.on_off_state = ga.address;
       agg.consumedIds.add(ga.id);
-    } else if (/^dpst?-3-7$/.test(dpt)) {
+    } else if (dpt === "3-7") {
       if (parts.middle === 2) agg.dimming = ga.address;
       agg.consumedIds.add(ga.id);
-    } else if (/^dpst?-5-1$/.test(dpt)) {
+    } else if (dpt === "5-1") {
       if (parts.middle === 3) agg.brightness = ga.address;
       if (parts.middle === 4) agg.brightness_state = ga.address;
       agg.consumedIds.add(ga.id);
@@ -102,10 +72,12 @@ export interface SwitchAggregate {
 }
 
 export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
-  const oneBit = gas.filter((g) => /^dpst?-1-1$/i.test(g.dpt ?? ""));
   const byBase = new Map<string, SwitchAggregate>();
 
-  for (const ga of oneBit) {
+  for (const ga of gas) {
+    const dpt = normalizeDptToHyphen(ga.dpt);
+    if (dpt !== "1-1") continue;
+
     const base = normalizeBaseName(ga.name);
     let agg = byBase.get(base);
     if (!agg) {
@@ -255,19 +227,6 @@ const RE_SHORT = /\b(short|step|stap|kort)\b/i;
 const RE_LONG = /\b(long|lang|up\/?down|omhoog|omlaag|open|close|sluit)\b/i;
 const RE_INVERT = /\b(invert|omgekeerd|inverse)\b/i;
 
-function normalizeDptToPair(dpt?: string): string | null {
-  if (!dpt) return null;
-  let s = dpt
-    .trim()
-    .toLowerCase()
-    .replace(/^dpst?-/, "");
-  s = s.replace(/\./g, "-");
-  const m = s.match(/^(\d+)-0*(\d+)$/);
-  if (m) return `${parseInt(m[1], 10)}-${parseInt(m[2], 10)}`;
-  if (/^\d+-\d+$/.test(s)) return s;
-  return null;
-}
-
 function coverBaseName(name: string): string {
   let n = name.toLowerCase();
   n = n
@@ -295,105 +254,160 @@ export interface CoverAggregate {
   invert_angle?: boolean;
 }
 
+interface CoverEntryMeta {
+  ga: GroupAddress;
+  dpt: string | null;
+  isCommand: boolean;
+  isStop: boolean;
+  isCoverLike: boolean;
+  hasStatus: boolean;
+  hasPositionHint: boolean;
+  hasAngleHint: boolean;
+  hasInvert: boolean;
+}
+
 export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
-  const covers = new Map<string, CoverAggregate>();
-  const hasCommand = new Set<string>();
+  const groups = new Map<
+    string,
+    {
+      name: string;
+      entries: CoverEntryMeta[];
+      hasCommand: boolean;
+    }
+  >();
 
   for (const ga of gas) {
-    const d = normalizeDptToPair(ga.dpt ?? "");
-    const n = ga.name;
-    const key = coverBaseName(n);
-
+    const name = ga.name;
+    const key = coverBaseName(name);
+    const d = normalizeDptToHyphen(ga.dpt);
+    const isCoverLike = RE_COVER_WORDS.test(name);
+    const isStop = RE_STOP.test(name);
     const isCommand =
       d === "1-7" ||
       d === "1-8" ||
       d === "1-10" ||
-      RE_STOP.test(n) ||
-      RE_LONG.test(n) ||
-      RE_SHORT.test(n);
+      isStop ||
+      RE_LONG.test(name) ||
+      RE_SHORT.test(name);
 
-    if (isCommand || RE_COVER_WORDS.test(n)) {
-      hasCommand.add(key);
-      let agg = covers.get(key);
-      if (!agg) {
-        agg = { name: n, consumedIds: new Set<string>() };
-        covers.set(key, agg);
-      }
-      if (d === "1-8") {
-        if (!agg.move_long_address) agg.move_long_address = ga.address;
-        agg.consumedIds.add(ga.id);
-      } else if (d === "1-7") {
-        if (!agg.move_short_address) agg.move_short_address = ga.address;
-        agg.consumedIds.add(ga.id);
-      } else if (d === "1-10") {
-        if (RE_STOP.test(n)) {
-          if (!agg.stop_address) agg.stop_address = ga.address;
-        } else {
+    const entry: CoverEntryMeta = {
+      ga,
+      dpt: d,
+      isCommand,
+      isStop,
+      isCoverLike,
+      hasStatus: RE_STATUS2.test(name),
+      hasPositionHint: d === "5-1" || RE_POS.test(name),
+      hasAngleHint: d === "5-3" || RE_ANGLE.test(name),
+      hasInvert: RE_INVERT.test(name),
+    };
+
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        name,
+        entries: [],
+        hasCommand: false,
+      };
+      groups.set(key, group);
+    }
+
+    if (isCommand && !group.hasCommand) {
+      group.name = name;
+    }
+
+    group.entries.push(entry);
+    if (isCommand) group.hasCommand = true;
+  }
+
+  const aggregates: CoverAggregate[] = [];
+
+  groups.forEach((group) => {
+    const agg: CoverAggregate = {
+      name: group.name,
+      consumedIds: new Set<string>(),
+    };
+
+    for (const entry of group.entries) {
+      const {
+        ga,
+        dpt,
+        isCommand,
+        isStop,
+        isCoverLike,
+        hasStatus,
+        hasPositionHint,
+        hasAngleHint,
+        hasInvert,
+      } = entry;
+
+      if (isCommand) {
+        if (dpt === "1-8" || (dpt === "1-10" && !isStop)) {
           if (!agg.move_long_address) agg.move_long_address = ga.address;
+          agg.consumedIds.add(ga.id);
+        } else if (dpt === "1-7") {
+          if (!agg.move_short_address) agg.move_short_address = ga.address;
+          agg.consumedIds.add(ga.id);
+        } else if (dpt === "1-10" && isStop) {
+          if (!agg.stop_address) agg.stop_address = ga.address;
+          agg.consumedIds.add(ga.id);
+        }
+
+        if (hasInvert) agg.invert_position = true;
+        continue;
+      }
+
+      const eligible = group.hasCommand || isCoverLike;
+      if (!eligible) continue;
+
+      if (hasPositionHint) {
+        if (hasStatus) {
+          if (!agg.position_state_address)
+            agg.position_state_address = ga.address;
+        } else {
+          if (!agg.position_address) agg.position_address = ga.address;
         }
         agg.consumedIds.add(ga.id);
+        if (hasInvert && !hasAngleHint) agg.invert_position = true;
+        continue;
       }
-      if (RE_INVERT.test(n)) agg.invert_position = true;
-    }
-  }
 
-  for (const ga of gas) {
-    const d = normalizeDptToPair(ga.dpt ?? "");
-    const n = ga.name;
-    const key = coverBaseName(n);
-
-    const eligible = hasCommand.has(key) || RE_COVER_WORDS.test(n);
-
-    if (!eligible) continue;
-
-    let agg = covers.get(key);
-    if (!agg) {
-      agg = { name: n, consumedIds: new Set<string>() };
-      covers.set(key, agg);
-    }
-
-    if (d === "5-1" || RE_POS.test(n)) {
-      if (RE_STATUS2.test(n)) {
-        if (!agg.position_state_address)
-          agg.position_state_address = ga.address;
-      } else {
-        if (!agg.position_address) agg.position_address = ga.address;
+      if (hasAngleHint) {
+        if (hasStatus) {
+          if (!agg.angle_state_address) agg.angle_state_address = ga.address;
+        } else {
+          if (!agg.angle_address) agg.angle_address = ga.address;
+        }
+        agg.consumedIds.add(ga.id);
+        if (hasInvert) agg.invert_angle = true;
+        continue;
       }
-      agg.consumedIds.add(ga.id);
-      continue;
-    }
 
-    if (d === "5-3" || RE_ANGLE.test(n)) {
-      if (RE_STATUS2.test(n)) {
-        if (!agg.angle_state_address) agg.angle_state_address = ga.address;
-      } else {
-        if (!agg.angle_address) agg.angle_address = ga.address;
+      if (hasInvert) {
+        agg.invert_position = true;
       }
-      agg.consumedIds.add(ga.id);
-      continue;
     }
 
-    if (RE_INVERT.test(n)) {
-      if (RE_ANGLE.test(n)) agg.invert_angle = true;
-      else agg.invert_position = true;
+    if (
+      agg.move_long_address ||
+      agg.move_short_address ||
+      agg.stop_address ||
+      agg.position_address ||
+      agg.position_state_address ||
+      agg.angle_address ||
+      agg.angle_state_address
+    ) {
+      aggregates.push(agg);
     }
-  }
+  });
 
-  return Array.from(covers.values()).filter(
-    (a) =>
-      a.move_long_address ||
-      a.move_short_address ||
-      a.stop_address ||
-      a.position_address ||
-      a.position_state_address ||
-      a.angle_address ||
-      a.angle_state_address
-  );
+  return aggregates;
 }
 
 /** ====================== Fallback mapping for single GA's ====================== */
 export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   const t = guessEntityType(ga.dpt, ga.name);
+  const dptHyphen = normalizeDptToHyphen(ga.dpt);
 
   if (t === "switch") {
     const payload: HaSwitch = { name: ga.name, address: ga.address };
@@ -409,11 +423,11 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   }
 
   if (t === "light") {
-    if (/^dpst?-1-1$/i.test(ga.dpt ?? "")) {
+    if (dptHyphen === "1-1") {
       const payload: HaLight = { name: ga.name, address: ga.address };
       return { domain: "light", payload };
     }
-    if (/^dpst?-5-1$/i.test(ga.dpt ?? "")) {
+    if (dptHyphen === "5-1") {
       const payload: HaSensor = {
         name: ga.name,
         state_address: ga.address,
