@@ -70,11 +70,11 @@ export default function EntityConfigurator({
           section={section}
           onChange={onChange}
           onReset={onReset}
-          collapsed={Boolean(collapsed[section.domain])}
+          collapsed={collapsed[section.domain] ?? true}
           onToggle={() =>
             setCollapsed((prev) => ({
               ...prev,
-              [section.domain]: !prev[section.domain],
+              [section.domain]: !(prev[section.domain] ?? true),
             }))
           }
         />
