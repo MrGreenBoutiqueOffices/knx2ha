@@ -66,7 +66,7 @@ export default function OptionsBar({
         <Button
           onClick={onReset}
           className="cursor-pointer"
-          disabled={busy && !file}
+          disabled={busy}
           variant="outline"
         >
           <RefreshCw className="mr-2 h-4 w-4" />
