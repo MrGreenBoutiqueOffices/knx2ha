@@ -2,27 +2,39 @@
 
 import { Badge } from "@/components/ui/badge";
 import type { EntitySummary } from "@/lib/knx/export";
+import type { ComponentType, SVGProps } from "react";
+import {
+  Activity,
+  Droplets,
+  Gauge,
+  SunMedium,
+  Thermometer,
+  Waves,
+  Wind,
+  Zap,
+} from "lucide-react";
 
-const SENSOR_UNITS: Record<string, string> = {
-  temperature: "°C",
-  illuminance: "lx",
-  humidity: "%RH",
-  ppm: "ppm",
-  voltage: "V",
-  curr: "A",
-  pressure_2byte: "hPa",
-  power_2byte: "W",
-  wind_speed_ms: "m/s",
-  wind_speed_kmh: "km/h",
-  rain_amount: "mm",
-  volume_flow: "m³/h",
-  percent: "%",
-  brightness: "lx",
+type SensorMeta = {
+  unit?: string;
+  Icon?: ComponentType<SVGProps<SVGSVGElement>>;
 };
 
-function unitFor(type: string): string | undefined {
-  return SENSOR_UNITS[type];
-}
+const SENSOR_META: Record<string, SensorMeta> = {
+  temperature: { unit: "°C", Icon: Thermometer },
+  illuminance: { unit: "lx", Icon: SunMedium },
+  humidity: { unit: "%", Icon: Droplets },
+  ppm: { unit: "ppm", Icon: Gauge },
+  voltage: { unit: "V", Icon: Zap },
+  curr: { unit: "A", Icon: Activity },
+  pressure_2byte: { unit: "hPa", Icon: Gauge },
+  power_2byte: { unit: "W", Icon: Zap },
+  wind_speed_ms: { unit: "m/s", Icon: Wind },
+  wind_speed_kmh: { unit: "km/h", Icon: Wind },
+  rain_amount: { unit: "mm", Icon: Waves },
+  volume_flow: { unit: "m³/h", Icon: Waves },
+  percent: { unit: "%", Icon: Gauge },
+  brightness: { unit: "lx", Icon: SunMedium },
+};
 
 export default function StatsBar({ summary }: { summary: EntitySummary }) {
   return (
@@ -36,7 +48,10 @@ export default function StatsBar({ summary }: { summary: EntitySummary }) {
         <Badge variant="outline">sensor: {summary.counts.sensor}</Badge>
         <Badge variant="outline">cover: {summary.counts.cover}</Badge>
         {summary.counts._unknown > 0 && (
-          <Badge variant="destructive">
+          <Badge
+            variant="outline"
+            className="border-destructive text-destructive"
+          >
             _unknown: {summary.counts._unknown}
           </Badge>
         )}
@@ -51,18 +66,22 @@ export default function StatsBar({ summary }: { summary: EntitySummary }) {
           {Object.entries(summary.sensorsByType)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 8)
-            .map(([t, n]) => (
-              <span key={t} className="me-3">
-                <code>{t}</code>
-                {unitFor(t) ? (
-                  <>
-                    {" "}
-                    (<span>{unitFor(t)}</span>)
-                  </>
-                ) : null}{" "}
-                × {n}
-              </span>
-            ))}
+            .map(([type, count]) => {
+              const meta = SENSOR_META[type] ?? {};
+              const Icon = meta.Icon;
+              return (
+                <span key={type} className="me-4 inline-flex items-center gap-1">
+                  {Icon ? (
+                    <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : null}
+                  <code>{type}</code>
+                  {meta.unit ? (
+                    <span className="text-muted-foreground">({meta.unit})</span>
+                  ) : null}
+                  × {count}
+                </span>
+              );
+            })}
         </div>
       )}
     </>
