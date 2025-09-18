@@ -33,15 +33,15 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
       byBase.set(base, agg);
     }
 
-    const dpt = (ga.dpt ?? "").toLowerCase();
-    if (/^dpst?-1-1$/.test(dpt)) {
+    const dpt = normalizeDptToHyphen(ga.dpt);
+    if (dpt === "1-1") {
       if (parts.middle === 1) agg.on_off = ga.address;
       if (parts.middle === 5) agg.on_off_state = ga.address;
       agg.consumedIds.add(ga.id);
-    } else if (/^dpst?-3-7$/.test(dpt)) {
+    } else if (dpt === "3-7") {
       if (parts.middle === 2) agg.dimming = ga.address;
       agg.consumedIds.add(ga.id);
-    } else if (/^dpst?-5-1$/.test(dpt)) {
+    } else if (dpt === "5-1") {
       if (parts.middle === 3) agg.brightness = ga.address;
       if (parts.middle === 4) agg.brightness_state = ga.address;
       agg.consumedIds.add(ga.id);
@@ -72,10 +72,12 @@ export interface SwitchAggregate {
 }
 
 export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
-  const oneBit = gas.filter((g) => /^dpst?-1-1$/i.test(g.dpt ?? ""));
   const byBase = new Map<string, SwitchAggregate>();
 
-  for (const ga of oneBit) {
+  for (const ga of gas) {
+    const dpt = normalizeDptToHyphen(ga.dpt);
+    if (dpt !== "1-1") continue;
+
     const base = normalizeBaseName(ga.name);
     let agg = byBase.get(base);
     if (!agg) {
@@ -257,7 +259,7 @@ export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
   const hasCommand = new Set<string>();
 
   for (const ga of gas) {
-    const d = normalizeDptToHyphen(ga.dpt ?? "");
+    const d = normalizeDptToHyphen(ga.dpt);
     const n = ga.name;
     const key = coverBaseName(n);
 
@@ -295,7 +297,7 @@ export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
   }
 
   for (const ga of gas) {
-    const d = normalizeDptToHyphen(ga.dpt ?? "");
+    const d = normalizeDptToHyphen(ga.dpt);
     const n = ga.name;
     const key = coverBaseName(n);
 
@@ -351,6 +353,7 @@ export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
 /** ====================== Fallback mapping for single GA's ====================== */
 export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   const t = guessEntityType(ga.dpt, ga.name);
+  const dptHyphen = normalizeDptToHyphen(ga.dpt);
 
   if (t === "switch") {
     const payload: HaSwitch = { name: ga.name, address: ga.address };
@@ -366,11 +369,11 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   }
 
   if (t === "light") {
-    if (/^dpst?-1-1$/i.test(ga.dpt ?? "")) {
+    if (dptHyphen === "1-1") {
       const payload: HaLight = { name: ga.name, address: ga.address };
       return { domain: "light", payload };
     }
-    if (/^dpst?-5-1$/i.test(ga.dpt ?? "")) {
+    if (dptHyphen === "5-1") {
       const payload: HaSensor = {
         name: ga.name,
         state_address: ga.address,
