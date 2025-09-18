@@ -173,9 +173,12 @@ export function toHomeAssistantYaml(
 ): string {
   const ent = buildHaEntities(catalog, opts);
 
+  return haEntitiesToYaml(ent);
+}
+
+export function haEntitiesToYaml(ent: HaEntities): string {
   const doc = new YAML.Document();
   doc.contents = entitiesToYaml(doc as Document.Parsed, ent);
-
   return String(doc);
 }
 
