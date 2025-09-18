@@ -10,42 +10,12 @@ import {
   UnknownEntity,
 } from "../types";
 import { isLA, guessEntityType } from "./heuristics";
-import { parseAddress } from "./utils";
+import { parseAddress, normalizeDptToDot, normalizeDptToHyphen } from "./utils";
 
 /** ====================== MICRO OPTS / CACHES ====================== */
 const STATUS_RE = /\bstatus\b/i;
 const NAME_STRIP_RE =
   /\b(status|aan\/?uit|aan|uit|schakel|switch|cmd|command)\b/gi;
-
-const DPT_DOT_CACHE = new Map<string, string | undefined>();
-
-function normalizeDptToDot(dpt?: string): string | undefined {
-  if (!dpt) return undefined;
-  const key = dpt;
-  if (DPT_DOT_CACHE.has(key)) return DPT_DOT_CACHE.get(key);
-
-  let s = dpt.trim().toLowerCase();
-  s = s.replace(/^dpst?-/, "");
-  s = s.replace(/_/g, "-").replace(/\s+/g, "");
-  let out: string | undefined;
-
-  if (s.includes(".")) {
-    const [m, sub] = s.split(".", 2);
-    const mm = String(parseInt(m, 10));
-    const ss = sub ? sub.replace(/^0+/, "") : "";
-    out = ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
-  } else if (s.includes("-")) {
-    const [m, sub] = s.split("-", 2);
-    const mm = String(parseInt(m, 10));
-    const ss = sub ? sub.replace(/^0+/, "") : "";
-    out = ss ? `${mm}.${ss.padStart(3, "0")}` : mm;
-  } else if (/^\d+$/.test(s)) {
-    out = String(parseInt(s, 10));
-  }
-
-  DPT_DOT_CACHE.set(key, out);
-  return out;
-}
 
 /** ====================== LIGHT AGGREGATE ====================== */
 export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
@@ -255,19 +225,6 @@ const RE_SHORT = /\b(short|step|stap|kort)\b/i;
 const RE_LONG = /\b(long|lang|up\/?down|omhoog|omlaag|open|close|sluit)\b/i;
 const RE_INVERT = /\b(invert|omgekeerd|inverse)\b/i;
 
-function normalizeDptToPair(dpt?: string): string | null {
-  if (!dpt) return null;
-  let s = dpt
-    .trim()
-    .toLowerCase()
-    .replace(/^dpst?-/, "");
-  s = s.replace(/\./g, "-");
-  const m = s.match(/^(\d+)-0*(\d+)$/);
-  if (m) return `${parseInt(m[1], 10)}-${parseInt(m[2], 10)}`;
-  if (/^\d+-\d+$/.test(s)) return s;
-  return null;
-}
-
 function coverBaseName(name: string): string {
   let n = name.toLowerCase();
   n = n
@@ -300,7 +257,7 @@ export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
   const hasCommand = new Set<string>();
 
   for (const ga of gas) {
-    const d = normalizeDptToPair(ga.dpt ?? "");
+    const d = normalizeDptToHyphen(ga.dpt ?? "");
     const n = ga.name;
     const key = coverBaseName(n);
 
@@ -338,7 +295,7 @@ export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
   }
 
   for (const ga of gas) {
-    const d = normalizeDptToPair(ga.dpt ?? "");
+    const d = normalizeDptToHyphen(ga.dpt ?? "");
     const n = ga.name;
     const key = coverBaseName(n);
 

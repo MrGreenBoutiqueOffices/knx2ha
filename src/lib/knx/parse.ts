@@ -1,13 +1,7 @@
 import { unzip } from "fflate";
 import type { GroupAddress, KnxCatalog } from "../types";
 import { ParseProgress } from "../types/parse";
-
-function decodeGaIntToTriple(n: number): string {
-  const main = (n >> 11) & 0x1f; // 5 bits
-  const middle = (n >> 8) & 0x07; // 3 bits
-  const sub = n & 0xff; // 8 bits
-  return `${main}/${middle}/${sub}`;
-}
+import { decodeGaIntToTriple } from "./utils";
 
 function post(
   onProgress: ((p: ParseProgress) => void) | undefined,
@@ -71,6 +65,7 @@ function scanGroupAddresses(
   }
 
   let tagMatch: RegExpExecArray | null;
+  RE_GROUP_TAG.lastIndex = 0;
   while ((tagMatch = RE_GROUP_TAG.exec(xml)) !== null) {
     const attrStr = tagMatch[1];
     const attrs: Record<string, string | undefined> = {};
@@ -187,7 +182,7 @@ export async function parseKnxproj(
   });
 
   const map = new Map<string, GroupAddress>();
-  for (const ga of gathered) map.set(`${ga.address}@@${ga.name}`, ga);
+  for (const ga of gathered) map.set(ga.id, ga);
 
   const list = Array.from(map.values()).sort((a, b) =>
     compareAddress(a.address, b.address)
