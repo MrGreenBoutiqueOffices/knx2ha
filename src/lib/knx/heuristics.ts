@@ -29,7 +29,7 @@ export function guessEntityType(dpt: string | undefined, name: string): HAType {
   const isSwitchLike = SWITCH_HINT_RE.test(lowerName);
   const hasTimeHint = TIME_HINT_RE.test(lowerName);
   const hasDateHint = DATE_HINT_RE.test(lowerName);
-  const hasDateTimeHint = hasTimeHint && hasDateHint;
+  const hasBothTimeAndDateHints = hasTimeHint && hasDateHint;
   const explicitDateTimeHint = DATETIME_HINT_RE.test(lowerName);
 
   const isTimeDpt = dot === "10.001" || nd === "10-1";
@@ -37,7 +37,7 @@ export function guessEntityType(dpt: string | undefined, name: string): HAType {
   const isDateTimeDpt = dot === "19.001" || nd === "19-1";
 
   if (isDateTimeDpt) {
-    if (explicitDateTimeHint || hasDateTimeHint) {
+    if (explicitDateTimeHint || hasBothTimeAndDateHints) {
       return "datetime";
     }
     if (!isSwitchLike) return "datetime";
