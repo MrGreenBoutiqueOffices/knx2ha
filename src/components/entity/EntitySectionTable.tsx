@@ -1,24 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ComponentType, SVGProps } from "react";
 import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import {
-  Activity,
-  Droplets,
-  Gauge,
-  SunMedium,
-  Thermometer,
-  Waves,
-  Wind,
-  Zap,
-  ChevronDown,
-} from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,23 +36,7 @@ import {
   entityPrimaryIdentifier,
   extractKeyIdentifier,
 } from "./entity-config";
-
-const SENSOR_META: Record<string, { unit?: string; Icon?: ComponentType<SVGProps<SVGSVGElement>> }> = {
-  temperature: { unit: "°C", Icon: Thermometer },
-  illuminance: { unit: "lx", Icon: SunMedium },
-  humidity: { unit: "%", Icon: Droplets },
-  ppm: { unit: "ppm", Icon: Gauge },
-  voltage: { unit: "V", Icon: Zap },
-  curr: { unit: "A", Icon: Activity },
-  pressure_2byte: { unit: "hPa", Icon: Gauge },
-  power_2byte: { unit: "W", Icon: Zap },
-  wind_speed_ms: { unit: "m/s", Icon: Wind },
-  wind_speed_kmh: { unit: "km/h", Icon: Wind },
-  rain_amount: { unit: "mm", Icon: Waves },
-  volume_flow: { unit: "m³/h", Icon: Waves },
-  percent: { unit: "%", Icon: Gauge },
-  brightness: { unit: "lx", Icon: SunMedium },
-};
+import { SENSOR_META } from "@/lib/knx/sensorMeta";
 
 interface EntityTableRow {
   key: string;
@@ -122,7 +95,7 @@ function AddressBadgeList({ items }: { items: AddressBadgeProps[] }) {
           key={`${item.label}-${item.value}`}
           label={item.label}
           value={item.value}
-          intent={item.intent ?? (item.value === "_unknown" ? "warning" : "normal")}
+          intent={item.intent ?? (item.label === "_unknown" ? "warning" : "normal")}
         />
       ))}
     </div>
