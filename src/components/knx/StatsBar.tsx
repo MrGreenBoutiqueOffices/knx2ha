@@ -2,27 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import type { EntitySummary } from "@/lib/knx/export";
-
-const SENSOR_UNITS: Record<string, string> = {
-  temperature: "°C",
-  illuminance: "lx",
-  humidity: "%RH",
-  ppm: "ppm",
-  voltage: "V",
-  curr: "A",
-  pressure_2byte: "hPa",
-  power_2byte: "W",
-  wind_speed_ms: "m/s",
-  wind_speed_kmh: "km/h",
-  rain_amount: "mm",
-  volume_flow: "m³/h",
-  percent: "%",
-  brightness: "lx",
-};
-
-function unitFor(type: string): string | undefined {
-  return SENSOR_UNITS[type];
-}
+import { SENSOR_META } from "@/lib/knx/sensorMeta";
 
 export default function StatsBar({ summary }: { summary: EntitySummary }) {
   return (
@@ -36,7 +16,10 @@ export default function StatsBar({ summary }: { summary: EntitySummary }) {
         <Badge variant="outline">sensor: {summary.counts.sensor}</Badge>
         <Badge variant="outline">cover: {summary.counts.cover}</Badge>
         {summary.counts._unknown > 0 && (
-          <Badge variant="destructive">
+          <Badge
+            variant="outline"
+            className="border-destructive text-destructive"
+          >
             _unknown: {summary.counts._unknown}
           </Badge>
         )}
@@ -51,18 +34,22 @@ export default function StatsBar({ summary }: { summary: EntitySummary }) {
           {Object.entries(summary.sensorsByType)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 8)
-            .map(([t, n]) => (
-              <span key={t} className="me-3">
-                <code>{t}</code>
-                {unitFor(t) ? (
-                  <>
-                    {" "}
-                    (<span>{unitFor(t)}</span>)
-                  </>
-                ) : null}{" "}
-                × {n}
-              </span>
-            ))}
+            .map(([type, count]) => {
+              const meta = SENSOR_META[type] ?? {};
+              const Icon = meta.Icon;
+              return (
+                <span key={type} className="me-4 inline-flex items-center gap-1">
+                  {Icon ? (
+                    <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : null}
+                  <code>{type}</code>
+                  {meta.unit ? (
+                    <span className="text-muted-foreground">({meta.unit})</span>
+                  ) : null}
+                  × {count}
+                </span>
+              );
+            })}
         </div>
       )}
     </>
