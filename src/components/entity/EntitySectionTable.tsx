@@ -348,6 +348,20 @@ function createColumns(
     });
   }
 
+  if (domain === "time" || domain === "date" || domain === "datetime") {
+    columns.push({
+      id: `${domain}_state`,
+      header: "State",
+      cell: ({ row }) => {
+        const entity = row.original.base as
+          | DomainEntityMap["time"]
+          | DomainEntityMap["date"]
+          | DomainEntityMap["datetime"];
+        return <PrimaryCell value={entity.state_address ?? ""} />;
+      },
+    });
+  }
+
   if (domain === "light") {
     columns.push({
       id: "light_command",

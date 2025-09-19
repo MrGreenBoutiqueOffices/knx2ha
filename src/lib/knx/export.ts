@@ -6,6 +6,9 @@ import {
   HaBinarySensor,
   HaLight,
   HaSensor,
+  HaTime,
+  HaDate,
+  HaDateTime,
   HaCover,
   UnknownEntity,
   GroupAddress,
@@ -23,6 +26,9 @@ export interface HaEntities {
   binarySensors: HaBinarySensor[];
   lights: HaLight[];
   sensors: HaSensor[];
+  times: HaTime[];
+  dates: HaDate[];
+  datetimes: HaDateTime[];
   covers: HaCover[];
   unknowns: UnknownEntity[];
 }
@@ -35,6 +41,9 @@ export function buildHaEntities(
   const binarySensors: HaBinarySensor[] = [];
   const lights: HaLight[] = [];
   const sensors: HaSensor[] = [];
+  const times: HaTime[] = [];
+  const dates: HaDate[] = [];
+  const datetimes: HaDateTime[] = [];
   const covers: HaCover[] = [];
   const unknowns: UnknownEntity[] = [];
 
@@ -91,6 +100,15 @@ export function buildHaEntities(
       case "sensor":
         sensors.push(mapped.payload);
         break;
+      case "time":
+        times.push(mapped.payload);
+        break;
+      case "date":
+        dates.push(mapped.payload);
+        break;
+      case "datetime":
+        datetimes.push(mapped.payload);
+        break;
       case "cover":
         covers.push(mapped.payload);
         break;
@@ -109,6 +127,9 @@ export function buildHaEntities(
     binarySensors,
     lights,
     sensors,
+    times,
+    dates,
+    datetimes,
     covers,
     unknowns: finalUnknowns,
   };
@@ -160,6 +181,10 @@ function entitiesToYaml(doc: Document.Parsed, ent: HaEntities): YAMLMap {
     knx.set("binary_sensor", domainListToYaml(doc, ent.binarySensors));
   if (ent.lights.length) knx.set("light", domainListToYaml(doc, ent.lights));
   if (ent.sensors.length) knx.set("sensor", domainListToYaml(doc, ent.sensors));
+  if (ent.times.length) knx.set("time", domainListToYaml(doc, ent.times));
+  if (ent.dates.length) knx.set("date", domainListToYaml(doc, ent.dates));
+  if (ent.datetimes.length)
+    knx.set("datetime", domainListToYaml(doc, ent.datetimes));
   if (ent.covers.length) knx.set("cover", domainListToYaml(doc, ent.covers));
   if (ent.unknowns.length)
     knx.set("_unknown", domainListToYaml(doc, ent.unknowns));
@@ -204,6 +229,9 @@ export interface EntitySummary {
     binary_sensor: number;
     light: number;
     sensor: number;
+    time: number;
+    date: number;
+    datetime: number;
     cover: number;
     _unknown: number;
     total: number;
@@ -217,6 +245,9 @@ export function summarizeEntities(ent: HaEntities): EntitySummary {
     binary_sensor: ent.binarySensors.length,
     light: ent.lights.length,
     sensor: ent.sensors.length,
+    time: ent.times.length,
+    date: ent.dates.length,
+    datetime: ent.datetimes.length,
     cover: ent.covers.length,
     _unknown: ent.unknowns.length,
     total:
@@ -224,6 +255,9 @@ export function summarizeEntities(ent: HaEntities): EntitySummary {
       ent.binarySensors.length +
       ent.lights.length +
       ent.sensors.length +
+      ent.times.length +
+      ent.dates.length +
+      ent.datetimes.length +
       ent.covers.length +
       ent.unknowns.length,
   };

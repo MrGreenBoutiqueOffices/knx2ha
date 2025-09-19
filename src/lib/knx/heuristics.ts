@@ -1,5 +1,5 @@
 import type { HAType } from "../types";
-import { normalizeDptToHyphen } from "./utils";
+import { normalizeDptToDot, normalizeDptToHyphen } from "./utils";
 
 function isStatusName(name: string): boolean {
   return /\bstatus\b/i.test(name);
@@ -11,12 +11,43 @@ function isCoverLike(name: string): boolean {
   );
 }
 
+const TIME_HINT_RE =
+  /(tijd|time|clock|rtc|uur|zeit|uhr|hora|heure|std|stunden|stunde|ntp|utc)/i;
+const DATE_HINT_RE = /(datum|date|calendar|kalender|fecha|jour|tag|giorno)/i;
+const DATETIME_HINT_RE =
+  /(datetime|date[\s_/-]*time|tijdstempel|timestamp|zeitstempel)/i;
+const SWITCH_HINT_RE = /(aan|uit|switch|centraal|on|off)/i;
+
 export function isLA(name: string): boolean {
   return /^LA\d+/i.test(name) || /^LA\d+-/i.test(name);
 }
 
 export function guessEntityType(dpt: string | undefined, name: string): HAType {
   const nd = normalizeDptToHyphen(dpt);
+  const dot = normalizeDptToDot(dpt);
+  const n = name.toLowerCase();
+  const isSwitchLike = SWITCH_HINT_RE.test(n);
+
+  const isTimeDpt = dot === "10.001" || nd === "10-1";
+  const isDateDpt = dot === "11.001" || nd === "11-1";
+  const isDateTimeDpt = dot === "19.001" || nd === "19-1";
+
+  if (isDateTimeDpt) {
+    if (DATETIME_HINT_RE.test(name) || (TIME_HINT_RE.test(name) && DATE_HINT_RE.test(name))) {
+      return "datetime";
+    }
+    if (!isSwitchLike) return "datetime";
+  }
+
+  if (isTimeDpt) {
+    if (TIME_HINT_RE.test(name)) return "time";
+    if (!isSwitchLike) return "time";
+  }
+
+  if (isDateDpt) {
+    if (DATE_HINT_RE.test(name)) return "date";
+    if (!isSwitchLike) return "date";
+  }
 
   if (nd) {
     if (nd === "1-1") return isStatusName(name) ? "binary_sensor" : "switch";
@@ -31,8 +62,6 @@ export function guessEntityType(dpt: string | undefined, name: string): HAType {
       nd === "9"
     )
       return "sensor";
-    if (nd === "10-1") return "sensor";
-    if (nd === "11-1") return "sensor";
     if (nd === "12-1" || nd.startsWith("12-")) return "sensor";
 
     if (nd === "1-7" || nd === "1-8" || nd === "1-10") return "cover";
@@ -41,7 +70,6 @@ export function guessEntityType(dpt: string | undefined, name: string): HAType {
     if (nd === "20-102") return "sensor";
   }
 
-  const n = name.toLowerCase();
   if (isLA(name) || /(licht|light|lamp|dim)/.test(n)) return "light";
   if (isCoverLike(name)) return "cover";
   if (

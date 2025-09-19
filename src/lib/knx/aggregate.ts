@@ -6,6 +6,9 @@ import {
   HaBinarySensor,
   HaLight,
   HaSensor,
+  HaTime,
+  HaDate,
+  HaDateTime,
   HaCover,
   UnknownEntity,
 } from "../types";
@@ -204,6 +207,8 @@ export function dptToSensorType(
   name?: string
 ): string | undefined {
   const norm = normalizeDptToDot(dpt);
+  if (norm === "10.001" || norm === "11.001" || norm === "19.001")
+    return undefined;
   if (norm && DPT_TO_HA[norm]) return DPT_TO_HA[norm];
 
   if (norm === "5") return DPT_TO_HA["5"];
@@ -469,6 +474,33 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
       dpt: ga.dpt,
     };
     return { domain: "_unknown", payload: unknownPayload };
+  }
+
+  if (t === "time") {
+    const payload: HaTime = {
+      name: ga.name,
+      address: ga.address,
+      state_address: ga.address,
+    };
+    return { domain: "time", payload };
+  }
+
+  if (t === "date") {
+    const payload: HaDate = {
+      name: ga.name,
+      address: ga.address,
+      state_address: ga.address,
+    };
+    return { domain: "date", payload };
+  }
+
+  if (t === "datetime") {
+    const payload: HaDateTime = {
+      name: ga.name,
+      address: ga.address,
+      state_address: ga.address,
+    };
+    return { domain: "datetime", payload };
   }
 
   if (t === "cover") {
