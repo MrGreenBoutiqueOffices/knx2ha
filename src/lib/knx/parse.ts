@@ -10,10 +10,15 @@ function post(
   if (onProgress) onProgress(p);
 }
 
+// Progress slices ensure the bar ramps smoothly through each parser phase so
+// users see steady movement: zip scanning (0–20%), per-file work (20–80%),
+// catalog build (80–95%), and finalization (95–100%).
 const SCAN_RANGE: [number, number] = [0, 20];
 const FILE_RANGE: [number, number] = [20, 80];
 const BUILD_RANGE: [number, number] = [80, 95];
 const FINAL_RANGE: [number, number] = [95, 100];
+// Target number of incremental updates while assembling the catalog so large
+// projects feel responsive without overwhelming the UI.
 const BUILD_PROGRESS_TARGET_UPDATES = 80;
 
 function clamp01(value: number): number {
