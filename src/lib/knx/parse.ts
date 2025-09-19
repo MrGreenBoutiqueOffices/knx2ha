@@ -119,22 +119,30 @@ export async function parseKnxproj(
   const onProgress = opts?.onProgress;
   let foundGAs = 0;
   let processedGAs = 0;
+  let totalFiles = 0;
+  let processedFiles = 0;
 
-  post(onProgress, {
-    phase: "load_zip",
-    percent: rangePercent(SCAN_RANGE, 0),
-    foundGAs,
-    processedGAs,
-  });
+  const emit = (
+    phase: ParseProgress["phase"],
+    percent: number,
+    extra: Partial<ParseProgress> = {}
+  ) => {
+    post(onProgress, {
+      phase,
+      percent,
+      totalFiles,
+      processedFiles,
+      foundGAs,
+      processedGAs,
+      ...extra,
+    });
+  };
+
+  emit("load_zip", rangePercent(SCAN_RANGE, 0));
 
   const buffer = await file.arrayBuffer();
 
-  post(onProgress, {
-    phase: "scan_entries",
-    percent: rangePercent(SCAN_RANGE, 0.05),
-    foundGAs,
-    processedGAs,
-  });
+  emit("scan_entries", rangePercent(SCAN_RANGE, 0.05));
 
   const entries: Record<string, Uint8Array> = await new Promise(
     (resolve, reject) => {
@@ -152,18 +160,11 @@ export async function parseKnxproj(
   const xmlNames = Object.keys(entries).filter((n) =>
     n.toLowerCase().endsWith(".xml")
   );
-  const totalFiles = xmlNames.length;
-  let processedFiles = 0;
+  totalFiles = xmlNames.length;
+  processedFiles = 0;
   const decoder = new TextDecoder("utf-8");
 
-  post(onProgress, {
-    phase: "scan_entries",
-    percent: rangePercent(SCAN_RANGE, 1),
-    totalFiles,
-    processedFiles,
-    foundGAs,
-    processedGAs,
-  });
+  emit("scan_entries", rangePercent(SCAN_RANGE, 1));
 
   const gathered: GroupAddress[] = [];
   let projectName: string | undefined;
@@ -174,15 +175,9 @@ export async function parseKnxproj(
 
   for (let i = 0; i < xmlNames.length; i++) {
     const name = xmlNames[i];
-    post(onProgress, {
-      phase: "extract_xml",
-      percent: perFilePercent(i, 0),
+    emit("extract_xml", perFilePercent(i, 0), {
       filename: name,
-      totalFiles,
-      processedFiles,
       filePercent: 0,
-      foundGAs,
-      processedGAs,
     });
 
     const xml = decoder.decode(entries[name]);
@@ -192,15 +187,9 @@ export async function parseKnxproj(
 
     processedFiles++;
     foundGAs += gas.length;
-    post(onProgress, {
-      phase: "parse_xml",
-      percent: perFilePercent(i, 1),
+    emit("parse_xml", perFilePercent(i, 1), {
       filename: name,
-      totalFiles,
-      processedFiles,
       filePercent: 100,
-      foundGAs,
-      processedGAs,
     });
   }
 
@@ -222,14 +211,7 @@ export async function parseKnxproj(
 
   const emitBuildProgress = () => {
     const ratio = totalFound === 0 ? 1 : processedEntries / totalFound;
-    post(onProgress, {
-      phase: "build_catalog",
-      percent: rangePercent(BUILD_RANGE, ratio),
-      totalFiles,
-      processedFiles,
-      foundGAs,
-      processedGAs,
-    });
+    emit("build_catalog", rangePercent(BUILD_RANGE, ratio));
   };
 
   emitBuildProgress();
@@ -255,14 +237,7 @@ export async function parseKnxproj(
     compareAddress(a.address, b.address)
   );
 
-  post(onProgress, {
-    phase: "done",
-    percent: rangePercent(FINAL_RANGE, 1),
-    totalFiles,
-    processedFiles,
-    foundGAs,
-    processedGAs,
-  });
+  emit("done", rangePercent(FINAL_RANGE, 1));
 
   return { project_name: projectName ?? null, group_addresses: list };
 }

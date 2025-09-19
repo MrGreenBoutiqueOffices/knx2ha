@@ -10,6 +10,9 @@ function basename(path?: string) {
   return idx >= 0 ? path.slice(idx + 1) : path;
 }
 
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
 export default function ProgressInfo({
   busy,
   progress,
@@ -25,14 +28,14 @@ export default function ProgressInfo({
     ? Math.max(0, Math.min(100, Math.round(progress)))
     : 0;
 
-  const isNumber = (value: unknown): value is number =>
-    typeof value === "number" && Number.isFinite(value);
-
   const totalFiles = info?.totalFiles;
   const processedFiles = info?.processedFiles;
+  const resolvedProcessedFiles = isFiniteNumber(processedFiles)
+    ? processedFiles
+    : 0;
   const filesLabel =
-    isNumber(totalFiles) && totalFiles > 0
-      ? `files ${Math.min(isNumber(processedFiles) ? processedFiles : 0, totalFiles)}/${totalFiles}`
+    isFiniteNumber(totalFiles) && totalFiles > 0
+      ? `files ${Math.min(resolvedProcessedFiles, totalFiles)}/${totalFiles}`
       : null;
 
   const foundGAs = info?.foundGAs;
@@ -41,13 +44,13 @@ export default function ProgressInfo({
   const gaLabel = (() => {
     const preferProcessed =
       info?.phase === "build_catalog" || info?.phase === "done";
-    if (preferProcessed && isNumber(processedGAs)) {
+    if (preferProcessed && isFiniteNumber(processedGAs)) {
       return `GA ${processedGAs}`;
     }
-    if (isNumber(foundGAs)) {
+    if (isFiniteNumber(foundGAs)) {
       return `GA ${foundGAs}`;
     }
-    if (isNumber(processedGAs)) {
+    if (isFiniteNumber(processedGAs)) {
       return `GA ${processedGAs}`;
     }
     return null;
