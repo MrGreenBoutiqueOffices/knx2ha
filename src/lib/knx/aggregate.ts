@@ -218,14 +218,14 @@ export function dptToSensorType(
 
 /** ====================== COVER AGGREGATE ====================== */
 const RE_COVER_WORDS =
-  /\b(rolluik|jaloezie|lamel|screen|blind|shutter|cover|gordijn|raam|schuifdeur|schuifdeuren|deur|door)\b/i;
-const RE_STATUS2 = /\b(status|state|feedback|actual|istwert)\b/i;
-const RE_POS = /\b(pos(ition)?|positie|stand)\b/i;
-const RE_ANGLE = /\b(angle|tilt|lamel|hoek)\b/i;
-const RE_STOP = /\bstop\b/i;
-const RE_SHORT = /\b(short|step|stap|kort)\b/i;
-const RE_LONG = /\b(long|lang|up\/?down|omhoog|omlaag|open|close|sluit)\b/i;
-const RE_INVERT = /\b(invert|omgekeerd|inverse)\b/i;
+  /\b(rolluik|jaloezie|lamel|screen|blind|shutter|cover|gordijn|raam|schuifdeur|schuifdeuren|deur|door)\b/i; // GA names indicating cover-like devices
+const RE_STATUS2 = /\b(status|state|feedback|actual|istwert)\b/i; // GA hints that carry feedback/state values
+const RE_POS = /\b(pos(ition)?|positie|stand)\b/i; // GA names indicating slat/cover position
+const RE_ANGLE = /\b(angle|tilt|lamel|hoek)\b/i; // GA names indicating slat tilt/angle control
+const RE_STOP = /\bstop\b/i; // GA names for stop commands on the cover actuator
+const RE_SHORT = /\b(short|step|stap|kort)\b/i; // GA names signalling short/stepwise movement
+const RE_LONG = /\b(long|lang|up\/?down|omhoog|omlaag|open|close|sluit)\b/i; // GA names signalling long/continuous movement
+const RE_INVERT = /\b(invert|omgekeerd|inverse)\b/i; // GA names signalling direction inversion
 
 function coverBaseName(name: string): string {
   let n = name.toLowerCase();
@@ -405,6 +405,22 @@ export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
 }
 
 /** ====================== Fallback mapping for single GA's ====================== */
+
+function assignCoverValue(
+  payload: HaCover,
+  kind: "position" | "angle",
+  address: string,
+  hasStatus: boolean
+): void {
+  if (kind === "angle") {
+    if (hasStatus) payload.angle_state_address = address;
+    else payload.angle_address = address;
+    return;
+  }
+  if (hasStatus) payload.position_state_address = address;
+  else payload.position_address = address;
+}
+
 export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   const t = guessEntityType(ga.dpt, ga.name);
   const dptHyphen = normalizeDptToHyphen(ga.dpt);
@@ -456,8 +472,53 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   }
 
   if (t === "cover") {
-    const payload: HaCover = { name: ga.name, move_long_address: ga.address };
-    return { domain: "cover", payload };
+    const payload: HaCover = { name: ga.name };
+    const dptHyphen = normalizeDptToHyphen(ga.dpt);
+    const hasStatus = RE_STATUS2.test(ga.name);
+    const hasAngleHint = RE_ANGLE.test(ga.name);
+    const hasPositionHint = RE_POS.test(ga.name);
+    const hasInvert = RE_INVERT.test(ga.name);
+    const isStopName = RE_STOP.test(ga.name);
+
+    let invertTargetsAngle = false;
+
+    if (dptHyphen === "1-7") {
+      payload.move_short_address = ga.address;
+    } else if (dptHyphen === "1-8" || (dptHyphen === "1-10" && !isStopName)) {
+      payload.move_long_address = ga.address;
+    } else if (dptHyphen === "1-10" && isStopName) {
+      payload.stop_address = ga.address;
+    } else if (dptHyphen === "5-3") {
+      invertTargetsAngle = true;
+      assignCoverValue(payload, "angle", ga.address, hasStatus);
+    } else if (dptHyphen === "5-1" || dptHyphen === "5") {
+      assignCoverValue(payload, "position", ga.address, hasStatus);
+    } else if (dptHyphen && dptHyphen.startsWith("5-")) {
+      if (hasAngleHint && !hasPositionHint) {
+        invertTargetsAngle = true;
+        assignCoverValue(payload, "angle", ga.address, hasStatus);
+      } else {
+        assignCoverValue(payload, "position", ga.address, hasStatus);
+      }
+    }
+
+    const recognized = Boolean(
+      payload.move_long_address ||
+        payload.move_short_address ||
+        payload.stop_address ||
+        payload.position_address ||
+        payload.position_state_address ||
+        payload.angle_address ||
+        payload.angle_state_address
+    );
+
+    if (recognized) {
+      if (hasInvert) {
+        if (invertTargetsAngle) payload.invert_angle = true;
+        else payload.invert_position = true;
+      }
+      return { domain: "cover", payload };
+    }
   }
 
   const payload: UnknownEntity = {

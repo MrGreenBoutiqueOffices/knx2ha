@@ -4,17 +4,17 @@ This project is a **Next.js application** that converts KNX configuration files 
 
 ## Key Features
 
-- 🔍 **KNX Group Address Parsing**
+- 🔍 **KNX Group Address Parsing**<br>
   Converts KNX addresses and DPTs into Home Assistant entities.
-- ⚡ **Smart Heuristics**
+- ⚡ **Smart Heuristics**<br>
   Automatically guesses the correct entity type (light, switch, cover, sensor, …).
-- 📝 **YAML Generator**
+- 📝 **YAML Generator**<br>
   Produces valid Home Assistant configurations (`configuration.yaml` or packages).
-- 🗂 **Aggregate View**
+- 🗂 **Aggregate View**<br>
   Combines related entities into logical sets (e.g., covers with state and position).
-- 🎨 **Customizable Entities**
+- 🎨 **Customizable Entities**<br>
   Allows manual adjustments and overrides for entity types and names.
-- 🌍 **Next.js Frontend**
+- 🌍 **Next.js Frontend**<br>
   Web interface for uploading, previewing, and exporting configurations.
 
 ## Getting Started
