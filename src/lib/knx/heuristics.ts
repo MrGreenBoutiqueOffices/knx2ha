@@ -25,27 +25,31 @@ export function isLA(name: string): boolean {
 export function guessEntityType(dpt: string | undefined, name: string): HAType {
   const nd = normalizeDptToHyphen(dpt);
   const dot = normalizeDptToDot(dpt);
-  const n = name.toLowerCase();
-  const isSwitchLike = SWITCH_HINT_RE.test(n);
+  const lowerName = name.toLowerCase();
+  const isSwitchLike = SWITCH_HINT_RE.test(lowerName);
+  const hasTimeHint = TIME_HINT_RE.test(lowerName);
+  const hasDateHint = DATE_HINT_RE.test(lowerName);
+  const hasDateTimeHint = hasTimeHint && hasDateHint;
+  const explicitDateTimeHint = DATETIME_HINT_RE.test(lowerName);
 
   const isTimeDpt = dot === "10.001" || nd === "10-1";
   const isDateDpt = dot === "11.001" || nd === "11-1";
   const isDateTimeDpt = dot === "19.001" || nd === "19-1";
 
   if (isDateTimeDpt) {
-    if (DATETIME_HINT_RE.test(name) || (TIME_HINT_RE.test(name) && DATE_HINT_RE.test(name))) {
+    if (explicitDateTimeHint || hasDateTimeHint) {
       return "datetime";
     }
     if (!isSwitchLike) return "datetime";
   }
 
   if (isTimeDpt) {
-    if (TIME_HINT_RE.test(name)) return "time";
+    if (hasTimeHint) return "time";
     if (!isSwitchLike) return "time";
   }
 
   if (isDateDpt) {
-    if (DATE_HINT_RE.test(name)) return "date";
+    if (hasDateHint) return "date";
     if (!isSwitchLike) return "date";
   }
 
@@ -70,15 +74,15 @@ export function guessEntityType(dpt: string | undefined, name: string): HAType {
     if (nd === "20-102") return "sensor";
   }
 
-  if (isLA(name) || /(licht|light|lamp|dim)/.test(n)) return "light";
+  if (isLA(name) || /(licht|light|lamp|dim)/.test(lowerName)) return "light";
   if (isCoverLike(name)) return "cover";
   if (
     /(temp|temperatuur|temperature|hum|co2|lux|druk|pressure|wind|rain|flow)/.test(
-      n
+      lowerName
     )
   )
     return "sensor";
   if (isStatusName(name)) return "binary_sensor";
-  if (/(aan|uit|switch|centraal)/.test(n)) return "switch";
+  if (isSwitchLike) return "switch";
   return "unknown";
 }
