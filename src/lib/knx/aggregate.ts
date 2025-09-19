@@ -464,29 +464,22 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
     const hasInvert = RE_INVERT.test(ga.name);
     const isStopName = RE_STOP.test(ga.name);
 
-    let recognized = false;
     let invertTargetsAngle = false;
 
     if (dptHyphen === "1-7") {
       payload.move_short_address = ga.address;
-      recognized = true;
     } else if (dptHyphen === "1-8" || (dptHyphen === "1-10" && !isStopName)) {
       payload.move_long_address = ga.address;
-      recognized = true;
     } else if (dptHyphen === "1-10" && isStopName) {
       payload.stop_address = ga.address;
-      recognized = true;
     } else if (dptHyphen === "5-3") {
       invertTargetsAngle = true;
-      recognized = true;
       if (hasStatus) payload.angle_state_address = ga.address;
       else payload.angle_address = ga.address;
     } else if (dptHyphen === "5-1" || dptHyphen === "5") {
-      recognized = true;
       if (hasStatus) payload.position_state_address = ga.address;
       else payload.position_address = ga.address;
     } else if (dptHyphen && dptHyphen.startsWith("5-")) {
-      recognized = true;
       if (hasAngleHint && !hasPositionHint) {
         invertTargetsAngle = true;
         if (hasStatus) payload.angle_state_address = ga.address;
@@ -496,6 +489,16 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
         else payload.position_address = ga.address;
       }
     }
+
+    const recognized = Boolean(
+      payload.move_long_address ||
+        payload.move_short_address ||
+        payload.stop_address ||
+        payload.position_address ||
+        payload.position_state_address ||
+        payload.angle_address ||
+        payload.angle_state_address
+    );
 
     if (recognized) {
       if (hasInvert) {
