@@ -224,8 +224,9 @@ export async function parseKnxproj(
   if (totalFound > 0) {
     for (const ga of gathered) {
       processedEntries++;
+      const existed = map.has(ga.id);
       map.set(ga.id, ga);
-      processedGAs = map.size;
+      if (!existed) processedGAs++;
 
       if (
         processedEntries === totalFound ||
@@ -234,8 +235,6 @@ export async function parseKnxproj(
         emitBuildProgress();
       }
     }
-  } else {
-    processedGAs = 0;
   }
 
   const list = Array.from(map.values()).sort((a, b) =>
