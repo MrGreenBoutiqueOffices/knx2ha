@@ -14,9 +14,10 @@ const SCAN_RANGE: [number, number] = [0, 20];
 const FILE_RANGE: [number, number] = [20, 80];
 const BUILD_RANGE: [number, number] = [80, 95];
 const FINAL_RANGE: [number, number] = [95, 100];
+const BUILD_PROGRESS_TARGET_UPDATES = 80;
 
 function clamp01(value: number): number {
-  if (value <= 0) return 0;
+  if (!Number.isFinite(value) || value <= 0) return 0;
   if (value >= 1) return 1;
   return value;
 }
@@ -213,9 +214,14 @@ export async function parseKnxproj(
 
   const map = new Map<string, GroupAddress>();
   const totalFound = gathered.length;
+  let processedEntries = 0;
+  const buildProgressBatch =
+    totalFound > 0
+      ? Math.max(1, Math.floor(totalFound / BUILD_PROGRESS_TARGET_UPDATES))
+      : 1;
 
   const emitBuildProgress = () => {
-    const ratio = totalFound === 0 ? 1 : processedGAs / totalFound;
+    const ratio = totalFound === 0 ? 1 : processedEntries / totalFound;
     post(onProgress, {
       phase: "build_catalog",
       percent: rangePercent(BUILD_RANGE, ratio),
@@ -230,10 +236,14 @@ export async function parseKnxproj(
 
   if (totalFound > 0) {
     for (const ga of gathered) {
+      processedEntries++;
       map.set(ga.id, ga);
-      processedGAs++;
+      processedGAs = map.size;
 
-      if (processedGAs === totalFound || processedGAs % 200 === 0) {
+      if (
+        processedEntries === totalFound ||
+        processedEntries % buildProgressBatch === 0
+      ) {
         emitBuildProgress();
       }
     }
