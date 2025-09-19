@@ -10,6 +10,22 @@ function post(
   if (onProgress) onProgress(p);
 }
 
+const SCAN_RANGE: [number, number] = [0, 20];
+const FILE_RANGE: [number, number] = [20, 80];
+const BUILD_RANGE: [number, number] = [80, 95];
+const FINAL_RANGE: [number, number] = [95, 100];
+
+function clamp01(value: number): number {
+  if (value <= 0) return 0;
+  if (value >= 1) return 1;
+  return value;
+}
+
+function rangePercent(range: [number, number], t: number): number {
+  const [start, end] = range;
+  return start + (end - start) * clamp01(t);
+}
+
 const RE_PROJECT = /<(?:\w+:)?Project\b[^>]*\bName="([^"]+)"/i;
 const RE_PROJ_INFO_1 =
   /<(?:\w+:)?ProjectInformation\b[^>]*\bProjectName="([^"]+)"/i;
@@ -100,11 +116,24 @@ export async function parseKnxproj(
   }
 ): Promise<KnxCatalog> {
   const onProgress = opts?.onProgress;
-  post(onProgress, { phase: "load_zip", percent: 2 });
+  let foundGAs = 0;
+  let processedGAs = 0;
+
+  post(onProgress, {
+    phase: "load_zip",
+    percent: rangePercent(SCAN_RANGE, 0),
+    foundGAs,
+    processedGAs,
+  });
 
   const buffer = await file.arrayBuffer();
 
-  post(onProgress, { phase: "scan_entries", percent: 5 });
+  post(onProgress, {
+    phase: "scan_entries",
+    percent: rangePercent(SCAN_RANGE, 0.05),
+    foundGAs,
+    processedGAs,
+  });
 
   const entries: Record<string, Uint8Array> = await new Promise(
     (resolve, reject) => {
@@ -123,31 +152,36 @@ export async function parseKnxproj(
     n.toLowerCase().endsWith(".xml")
   );
   const totalFiles = xmlNames.length;
-  post(onProgress, { phase: "scan_entries", percent: 8, totalFiles });
-
-  const baseStart = 10;
-  const baseEnd = 95;
   let processedFiles = 0;
   const decoder = new TextDecoder("utf-8");
 
-  function updateOverall(fileIndex: number, filePercent: number) {
-    const perFileSpan = (baseEnd - baseStart) / Math.max(1, totalFiles);
-    const percent = baseStart + perFileSpan * (fileIndex + filePercent / 100);
-    return Math.max(10, Math.min(95, percent));
-  }
+  post(onProgress, {
+    phase: "scan_entries",
+    percent: rangePercent(SCAN_RANGE, 1),
+    totalFiles,
+    processedFiles,
+    foundGAs,
+    processedGAs,
+  });
 
   const gathered: GroupAddress[] = [];
   let projectName: string | undefined;
+
+  const perFileDenom = Math.max(1, totalFiles);
+  const perFilePercent = (fileIndex: number, intra: number) =>
+    rangePercent(FILE_RANGE, (fileIndex + clamp01(intra)) / perFileDenom);
 
   for (let i = 0; i < xmlNames.length; i++) {
     const name = xmlNames[i];
     post(onProgress, {
       phase: "extract_xml",
-      percent: updateOverall(i, 0),
+      percent: perFilePercent(i, 0),
       filename: name,
       totalFiles,
       processedFiles,
-      filePercent: 100,
+      filePercent: 0,
+      foundGAs,
+      processedGAs,
     });
 
     const xml = decoder.decode(entries[name]);
@@ -156,13 +190,16 @@ export async function parseKnxproj(
     if (projectName === undefined && pn) projectName = pn;
 
     processedFiles++;
+    foundGAs += gas.length;
     post(onProgress, {
       phase: "parse_xml",
-      percent: updateOverall(i, 100),
+      percent: perFilePercent(i, 1),
       filename: name,
       totalFiles,
       processedFiles,
       filePercent: 100,
+      foundGAs,
+      processedGAs,
     });
   }
 
@@ -174,21 +211,48 @@ export async function parseKnxproj(
     projectName = topName?.replace(/\.knxproj$/i, "") || "Unknown";
   }
 
-  post(onProgress, {
-    phase: "build_catalog",
-    percent: 96,
-    totalFiles,
-    processedFiles,
-  });
-
   const map = new Map<string, GroupAddress>();
-  for (const ga of gathered) map.set(ga.id, ga);
+  const totalFound = gathered.length;
+
+  const emitBuildProgress = () => {
+    const ratio = totalFound === 0 ? 1 : processedGAs / totalFound;
+    post(onProgress, {
+      phase: "build_catalog",
+      percent: rangePercent(BUILD_RANGE, ratio),
+      totalFiles,
+      processedFiles,
+      foundGAs,
+      processedGAs,
+    });
+  };
+
+  emitBuildProgress();
+
+  if (totalFound > 0) {
+    for (const ga of gathered) {
+      map.set(ga.id, ga);
+      processedGAs++;
+
+      if (processedGAs === totalFound || processedGAs % 200 === 0) {
+        emitBuildProgress();
+      }
+    }
+  } else {
+    processedGAs = 0;
+  }
 
   const list = Array.from(map.values()).sort((a, b) =>
     compareAddress(a.address, b.address)
   );
 
-  post(onProgress, { phase: "done", percent: 100, totalFiles, processedFiles });
+  post(onProgress, {
+    phase: "done",
+    percent: rangePercent(FINAL_RANGE, 1),
+    totalFiles,
+    processedFiles,
+    foundGAs,
+    processedGAs,
+  });
 
   return { project_name: projectName ?? null, group_addresses: list };
 }

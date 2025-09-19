@@ -2,7 +2,7 @@
 
 import { Progress } from "@/components/ui/progress";
 import { Bug } from "lucide-react";
-import type { ParseProgress } from "@/lib/knx/parse";
+import type { ParseProgress } from "@/lib/types/parse";
 
 function basename(path?: string) {
   if (!path) return "";
@@ -25,6 +25,37 @@ export default function ProgressInfo({
     ? Math.max(0, Math.min(100, Math.round(progress)))
     : 0;
 
+  const isNumber = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value);
+
+  const totalFiles = info?.totalFiles;
+  const processedFiles = info?.processedFiles;
+  const filesLabel =
+    isNumber(totalFiles) && totalFiles > 0
+      ? `files ${Math.min(isNumber(processedFiles) ? processedFiles : 0, totalFiles)}/${totalFiles}`
+      : null;
+
+  const foundGAs = info?.foundGAs;
+  const processedGAs = info?.processedGAs;
+
+  const gaLabel = (() => {
+    const preferProcessed =
+      info?.phase === "build_catalog" || info?.phase === "done";
+    if (preferProcessed && isNumber(processedGAs)) {
+      return `GA ${processedGAs}`;
+    }
+    if (isNumber(foundGAs)) {
+      return `GA ${foundGAs}`;
+    }
+    if (isNumber(processedGAs)) {
+      return `GA ${processedGAs}`;
+    }
+    return null;
+  })();
+
+  const detailParts = [filesLabel, gaLabel].filter(Boolean);
+  const detailSuffix = detailParts.length ? ` — ${detailParts.join(", ")}` : "";
+
   return (
     <>
       {busy && (
@@ -40,22 +71,31 @@ export default function ProgressInfo({
             {info?.phase === "load_zip" ? (
               <>Loading zip…</>
             ) : info?.phase === "scan_entries" ? (
-              <>Scanning entries…</>
+              <>
+                Scanning entries…
+                {detailSuffix}
+              </>
             ) : info?.phase === "extract_xml" && info.filename ? (
               <>
                 Reading: <code>{basename(info.filename)}</code> (
-                {(info.filePercent ?? 0).toFixed(0)}%) —{" "}
-                {info.processedFiles ?? 0}/{info.totalFiles ?? 0}
+                {(info.filePercent ?? 0).toFixed(0)}%)
+                {detailSuffix}
               </>
             ) : info?.phase === "parse_xml" && info.filename ? (
               <>
-                Parsing: <code>{basename(info.filename)}</code> —{" "}
-                {info.processedFiles ?? 0}/{info.totalFiles ?? 0}
+                Parsing: <code>{basename(info.filename)}</code>
+                {detailSuffix}
               </>
             ) : info?.phase === "build_catalog" ? (
-              <>Building catalog…</>
+              <>
+                Building catalog…
+                {detailSuffix}
+              </>
             ) : info?.phase === "done" ? (
-              <>Done.</>
+              <>
+                Done.
+                {detailSuffix}
+              </>
             ) : (
               <>Working…</>
             )}

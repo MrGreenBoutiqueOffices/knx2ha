@@ -13,4 +13,6 @@ export interface ParseProgress {
   processedFiles?: number;
   filename?: string;
   filePercent?: number;
+  foundGAs?: number;
+  processedGAs?: number;
 }
