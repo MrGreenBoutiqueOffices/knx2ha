@@ -28,6 +28,9 @@ const SECTION_LABEL: Record<keyof KeyedEntities, string> = {
   binarySensors: "Binary sensors",
   lights: "Lights",
   sensors: "Sensors",
+  times: "Time",
+  dates: "Date",
+  datetimes: "Date & time",
   unknowns: "Unknown",
 };
 

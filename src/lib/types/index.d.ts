@@ -17,6 +17,9 @@ export type HAType =
   | "light"
   | "sensor"
   | "cover"
+  | "time"
+  | "date"
+  | "datetime"
   | "unknown";
 
 export interface HaSwitch {
@@ -50,6 +53,33 @@ export interface HaSensor {
   type: string;
 }
 
+export interface HaTime {
+  name?: string;
+  address: string;
+  state_address?: string;
+  respond_to_read?: boolean;
+  sync_state?: boolean | string | number;
+  entity_category?: string;
+}
+
+export interface HaDate {
+  name?: string;
+  address: string;
+  state_address?: string;
+  respond_to_read?: boolean;
+  sync_state?: boolean | string | number;
+  entity_category?: string;
+}
+
+export interface HaDateTime {
+  name?: string;
+  address: string;
+  state_address?: string;
+  respond_to_read?: boolean;
+  sync_state?: boolean | string | number;
+  entity_category?: string;
+}
+
 export interface HaCover {
   name?: string;
   move_long_address?: string;
@@ -76,6 +106,9 @@ export type MappedEntity =
   | { domain: "binary_sensor"; payload: HaBinarySensor }
   | { domain: "light"; payload: HaLight }
   | { domain: "sensor"; payload: HaSensor }
+  | { domain: "time"; payload: HaTime }
+  | { domain: "date"; payload: HaDate }
+  | { domain: "datetime"; payload: HaDateTime }
   | { domain: "cover"; payload: HaCover }
   | { domain: "_unknown"; payload: UnknownEntity };
 

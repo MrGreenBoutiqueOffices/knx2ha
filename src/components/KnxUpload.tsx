@@ -108,6 +108,36 @@ export default function KnxUpload() {
           current: applyEntityOverride(domain, key, entity, entityOverrides),
         };
       }),
+      times: baseEntities.times.map((entity, index) => {
+        const domain = DOMAIN_BY_COLLECTION.times;
+        const key = makeEntityKey(domain, entity, index);
+        return {
+          key,
+          domain,
+          base: entity,
+          current: applyEntityOverride(domain, key, entity, entityOverrides),
+        };
+      }),
+      dates: baseEntities.dates.map((entity, index) => {
+        const domain = DOMAIN_BY_COLLECTION.dates;
+        const key = makeEntityKey(domain, entity, index);
+        return {
+          key,
+          domain,
+          base: entity,
+          current: applyEntityOverride(domain, key, entity, entityOverrides),
+        };
+      }),
+      datetimes: baseEntities.datetimes.map((entity, index) => {
+        const domain = DOMAIN_BY_COLLECTION.datetimes;
+        const key = makeEntityKey(domain, entity, index);
+        return {
+          key,
+          domain,
+          base: entity,
+          current: applyEntityOverride(domain, key, entity, entityOverrides),
+        };
+      }),
       covers: baseEntities.covers.map((entity, index) => {
         const domain = DOMAIN_BY_COLLECTION.covers;
         const key = makeEntityKey(domain, entity, index);
@@ -138,6 +168,9 @@ export default function KnxUpload() {
       binarySensors: keyedEntities.binarySensors.map((item) => item.current),
       lights: keyedEntities.lights.map((item) => item.current),
       sensors: keyedEntities.sensors.map((item) => item.current),
+      times: keyedEntities.times.map((item) => item.current),
+      dates: keyedEntities.dates.map((item) => item.current),
+      datetimes: keyedEntities.datetimes.map((item) => item.current),
       covers: keyedEntities.covers.map((item) => item.current),
       unknowns: keyedEntities.unknowns.map((item) => item.current),
     } satisfies Entities;

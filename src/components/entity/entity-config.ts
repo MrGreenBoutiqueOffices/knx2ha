@@ -8,6 +8,9 @@ export const DOMAIN_BY_COLLECTION = {
   binarySensors: "binary_sensor",
   lights: "light",
   sensors: "sensor",
+  times: "time",
+  dates: "date",
+  datetimes: "datetime",
   covers: "cover",
   unknowns: "_unknown",
 } as const;
@@ -19,6 +22,9 @@ export type DomainEntityMap = {
   binary_sensor: Entities["binarySensors"][number];
   light: Entities["lights"][number];
   sensor: Entities["sensors"][number];
+  time: Entities["times"][number];
+  date: Entities["dates"][number];
+  datetime: Entities["datetimes"][number];
   cover: Entities["covers"][number];
   _unknown: Entities["unknowns"][number];
 };
@@ -52,6 +58,13 @@ export function entityPrimaryIdentifier<D extends EntityDomain>(
   }
   if (domain === "binary_sensor" || domain === "sensor") {
     const typed = entity as DomainEntityMap["sensor"];
+    return typed.state_address ?? null;
+  }
+  if (domain === "time" || domain === "date" || domain === "datetime") {
+    const typed = entity as
+      | DomainEntityMap["time"]
+      | DomainEntityMap["date"]
+      | DomainEntityMap["datetime"];
     return typed.state_address ?? null;
   }
   if (domain === "cover") {

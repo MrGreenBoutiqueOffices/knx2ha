@@ -14,6 +14,9 @@ export default function StatsBar({ summary }: { summary: EntitySummary }) {
           binary_sensor: {summary.counts.binary_sensor}
         </Badge>
         <Badge variant="outline">sensor: {summary.counts.sensor}</Badge>
+        <Badge variant="outline">time: {summary.counts.time}</Badge>
+        <Badge variant="outline">date: {summary.counts.date}</Badge>
+        <Badge variant="outline">datetime: {summary.counts.datetime}</Badge>
         <Badge variant="outline">cover: {summary.counts.cover}</Badge>
         {summary.counts._unknown > 0 && (
           <Badge
