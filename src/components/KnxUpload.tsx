@@ -148,6 +148,16 @@ export default function KnxUpload() {
           current: applyEntityOverride(domain, key, entity, entityOverrides),
         };
       }),
+      scenes: baseEntities.scenes.map((entity, index) => {
+        const domain = DOMAIN_BY_COLLECTION.scenes;
+        const key = makeEntityKey(domain, entity, index);
+        return {
+          key,
+          domain,
+          base: entity,
+          current: applyEntityOverride(domain, key, entity, entityOverrides),
+        };
+      }),
       unknowns: baseEntities.unknowns.map((entity, index) => {
         const domain = DOMAIN_BY_COLLECTION.unknowns;
         const key = makeEntityKey(domain, entity, index);
@@ -172,6 +182,7 @@ export default function KnxUpload() {
       dates: keyedEntities.dates.map((item) => item.current),
       datetimes: keyedEntities.datetimes.map((item) => item.current),
       covers: keyedEntities.covers.map((item) => item.current),
+      scenes: keyedEntities.scenes.map((item) => item.current),
       unknowns: keyedEntities.unknowns.map((item) => item.current),
     } satisfies Entities;
   }, [keyedEntities]);

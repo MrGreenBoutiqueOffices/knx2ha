@@ -396,6 +396,17 @@ function createColumns(
     });
   }
 
+  if (domain === "scene") {
+    columns.push({
+      id: "scene_address",
+      header: "Address",
+      cell: ({ row }) => {
+        const entity = row.original.base as DomainEntityMap["scene"];
+        return <PrimaryCell value={entity.address ?? ""} />;
+      },
+    });
+  }
+
   if (domain === "sensor") {
     columns.push({
       id: "sensor_state",

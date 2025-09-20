@@ -31,6 +31,7 @@ const SECTION_LABEL: Record<keyof KeyedEntities, string> = {
   times: "Time",
   dates: "Date",
   datetimes: "Date & time",
+  scenes: "Scenes",
   unknowns: "Unknown",
 };
 
