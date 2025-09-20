@@ -251,13 +251,21 @@ export async function parseKnxproj(
 
   emit("scan_entries", rangePercent(SCAN_RANGE, 0.05));
 
+  // Track .knxproj entries so we can fall back to a sensible project name even
+  // when the XML files don't expose it.
+  const knxprojEntries: string[] = [];
+
   const entries: Record<string, Uint8Array> = await new Promise(
     (resolve, reject) => {
       unzip(
         new Uint8Array(buffer),
         {
           // Only decompress XML files to reduce I/O and memory
-          filter: (f) => /\.xml$/i.test(f.name),
+          filter: (f) => {
+            const name = f.name || "";
+            if (/\.knxproj$/i.test(name)) knxprojEntries.push(name);
+            return /\.xml$/i.test(name);
+          },
         },
         (err: Error | null, out: unknown) => {
           if (err) return reject(err);
@@ -387,9 +395,17 @@ export async function parseKnxproj(
   }
 
   if (!projectName) {
-    // Fall back to uploaded filename (without extension) when XML didn't contain project info
-    const original = file.name || "Unknown";
-    projectName = original.replace(/\.(knxproj|zip)$/i, "").trim() || "Unknown";
+    const cleanBase = (name: string): string => {
+      const base = name.split(/[\\/]/).pop() || name;
+      return base.replace(/\.(knxproj|zip)$/i, "");
+    };
+
+    const candidate = knxprojEntries.length
+      ? cleanBase(knxprojEntries[0])
+      : cleanBase(file.name || "Unknown");
+
+    const trimmed = candidate.trim();
+    projectName = trimmed || "Unknown";
   }
 
   const map = new Map<string, GroupAddress>();
