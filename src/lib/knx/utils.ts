@@ -141,3 +141,8 @@ export function normalizeDptToHyphen(dpt?: string): string | null {
   DPT_HYPHEN_CACHE.set(key, value);
   return value;
 }
+
+export function isSceneLikeName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return /(\bscene\b|\bscène\b|\bszene\b|\bscena\b)/i.test(lower);
+}

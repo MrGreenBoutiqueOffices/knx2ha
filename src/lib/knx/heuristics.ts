@@ -1,5 +1,5 @@
 import type { HAType } from "../types";
-import { normalizeDptToDot, normalizeDptToHyphen } from "./utils";
+import { normalizeDptToDot, normalizeDptToHyphen, isSceneLikeName } from "./utils";
 
 function isStatusName(name: string): boolean {
   return /\bstatus\b/i.test(name);
@@ -22,7 +22,25 @@ export function isLA(name: string): boolean {
   return /^LA\d+/i.test(name) || /^LA\d+-/i.test(name);
 }
 
-export function guessEntityType(dpt: string | undefined, name: string): HAType {
+export function guessEntityType(dpt: string | undefined, name: string, address?: string): HAType {
+  // Central group: treat 0/1/* as scenes regardless of DPT
+  if (address && address.startsWith("0/1/")) return "scene";
+
+  // Lighting mapping based on main=1
+  if (address) {
+    const m = address.match(/^(\d+)\/(\d+)\/(\d+)$/);
+    if (m) {
+      const main = Number(m[1]);
+      const middle = Number(m[2]);
+      if (main === 1) {
+        // 1/1 and 1/5 are on/off; 1/2 is dimming step; 1/3 and 1/4 brightness
+        if (middle === 1 || middle === 5) return "light";
+        if (middle === 2) return "light";
+        if (middle === 3 || middle === 4) return "light";
+        // 1/0, 1/6, 1/7 are central; leave to other logic (unknown/switch)
+      }
+    }
+  }
   const nd = normalizeDptToHyphen(dpt);
   const dot = normalizeDptToDot(dpt);
   const lowerName = name.toLowerCase();
@@ -35,6 +53,11 @@ export function guessEntityType(dpt: string | undefined, name: string): HAType {
   const isTimeDpt = dot === "10.001" || nd === "10-1";
   const isDateDpt = dot === "11.001" || nd === "11-1";
   const isDateTimeDpt = dot === "19.001" || nd === "19-1";
+
+  // If the name clearly indicates a scene, honor that before strict DPT handling
+  if (isSceneLikeName(lowerName)) {
+    return "scene";
+  }
 
   if (isDateTimeDpt) {
     if (explicitDateTimeHint || hasBothTimeAndDateHints) {
@@ -54,6 +77,10 @@ export function guessEntityType(dpt: string | undefined, name: string): HAType {
   }
 
   if (nd) {
+    // KNX scenes are commonly DPT 18.* (DPT_SceneControl) or 17.* (scene number)
+    if (nd.startsWith("18-") || nd === "18" || nd.startsWith("17-") || nd === "17") {
+      return "scene";
+    }
     if (nd === "1-1") return isStatusName(name) ? "binary_sensor" : "switch";
     if (nd === "3-7") return "light";
     if (nd === "5-1")
@@ -76,6 +103,7 @@ export function guessEntityType(dpt: string | undefined, name: string): HAType {
 
   if (isLA(name) || /(licht|light|lamp|dim)/.test(lowerName)) return "light";
   if (isCoverLike(name)) return "cover";
+  if (isSceneLikeName(lowerName)) return "scene";
   if (
     /(temp|temperatuur|temperature|hum|co2|lux|druk|pressure|wind|rain|flow)/.test(
       lowerName

@@ -13,7 +13,8 @@ import {
   UnknownEntity,
 } from "../types";
 import { isLA, guessEntityType } from "./heuristics";
-import { parseAddress, normalizeDptToDot, normalizeDptToHyphen } from "./utils";
+import { parseAddress, normalizeDptToDot, normalizeDptToHyphen, isSceneLikeName } from "./utils";
+import { KnxLinkInfo } from "../types";
 
 /** ====================== MICRO OPTS / CACHES ====================== */
 const STATUS_RE = /\bstatus\b/i;
@@ -56,6 +57,162 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   );
 }
 
+/** ====================== ADDRESS-PATTERN LIGHT AGGREGATE (1/*) ====================== */
+export function buildAddressLightAggregates(gas: GroupAddress[]): LightAggregate[] {
+  // Map by sub index across middles for main group 1 (lighting)
+  // 1/1/*: on/off command (1.001)
+  // 1/5/*: on/off state (1.001)
+  // 1/2/*: dimming step (3.007)
+  // 1/3/*: brightness set (5.001)
+  // 1/4/*: brightness state (5.001)
+  type Key = number; // sub index
+  const groups = new Map<Key, LightAggregate & { nameChosen?: boolean }>();
+
+  for (const ga of gas) {
+    const parts = parseAddress(ga.address);
+    if (!parts) continue;
+    if (parts.main !== 1) continue;
+
+    // Skip central groups 1/0, 1/6, 1/7 from aggregation
+    if (parts.middle === 0 || parts.middle === 6 || parts.middle === 7) continue;
+
+    const dpt = normalizeDptToHyphen(ga.dpt);
+    let g = groups.get(parts.sub);
+    if (!g) {
+      g = { name: ga.name, consumedIds: new Set<string>() } as LightAggregate & {
+        nameChosen?: boolean;
+      };
+      groups.set(parts.sub, g);
+    }
+
+    // Prefer naming from 1/1 (switch cmd) or 1/3 (brightness cmd)
+    if (!g.nameChosen && (parts.middle === 1 || parts.middle === 3)) {
+      g.name = ga.name;
+      g.nameChosen = true;
+    }
+
+    if (parts.middle === 1 && dpt === "1-1") {
+      g.on_off = ga.address;
+      g.consumedIds.add(ga.id);
+      continue;
+    }
+    if (parts.middle === 5 && dpt === "1-1") {
+      g.on_off_state = ga.address;
+      g.consumedIds.add(ga.id);
+      continue;
+    }
+    if (parts.middle === 2 && dpt === "3-7") {
+      g.dimming = ga.address;
+      g.consumedIds.add(ga.id);
+      continue;
+    }
+    if (parts.middle === 3 && (dpt === "5-1" || dpt === "5")) {
+      g.brightness = ga.address;
+      g.consumedIds.add(ga.id);
+      continue;
+    }
+    if (parts.middle === 4 && (dpt === "5-1" || dpt === "5")) {
+      g.brightness_state = ga.address;
+      g.consumedIds.add(ga.id);
+      continue;
+    }
+  }
+
+  return Array.from(groups.values()).filter(
+    (a) => a.on_off || a.brightness || a.dimming
+  );
+}
+
+/** ====================== LINK-DRIVEN LIGHT AGGREGATE ====================== */
+export function buildLinkedLightAggregates(
+  gas: GroupAddress[],
+  linksByGa?: Map<string, KnxLinkInfo>
+): LightAggregate[] {
+  if (!linksByGa) return [];
+
+  type CtxKey = string;
+  const byCtx = new Map<CtxKey, { items: GroupAddress[]; name?: string }>();
+  const contextOf = (gaId: string): string | undefined => {
+    const l = linksByGa!.get(gaId);
+    return l?.comObject || l?.context;
+  };
+  const isStatus = (g: GroupAddress): boolean => /\bstatus\b|\bstate\b/i.test(g.name);
+  const isReadFlag = (gaId: string): boolean => {
+    const f = linksByGa!.get(gaId)?.flags || {};
+    const v = f["ReadFlag"];
+    return v === true || v === "true";
+  };
+
+  for (const g of gas) {
+    const ctx = g.id ? contextOf(g.id) : undefined;
+    if (!ctx) continue;
+    let entry = byCtx.get(ctx);
+    if (!entry) {
+      entry = { items: [], name: undefined };
+      byCtx.set(ctx, entry);
+    }
+    entry.items.push(g);
+    if (!entry.name) entry.name = g.name;
+  }
+
+  const out: LightAggregate[] = [];
+
+  byCtx.forEach(({ items, name }, ctx) => {
+    // Look for GA types inside this context
+    const oneBits: GroupAddress[] = [];
+    const dimming: GroupAddress[] = [];
+    const bright: GroupAddress[] = [];
+
+    for (const g of items) {
+      const d = normalizeDptToHyphen(g.dpt);
+      if (d === "1-1") oneBits.push(g);
+      else if (d === "3-7") dimming.push(g);
+      else if (d === "5-1" || d === "5") bright.push(g);
+    }
+
+    if (oneBits.length === 0 && dimming.length === 0 && bright.length === 0)
+      return;
+
+    const agg: LightAggregate = { name: name ?? ctx, consumedIds: new Set<string>() };
+
+    if (oneBits.length) {
+      // choose command and status
+      const cmd = oneBits.find((g) => !isStatus(g) && !isReadFlag(g.id)) || oneBits[0];
+      const st = oneBits.find((g) => isStatus(g) || isReadFlag(g.id));
+      if (cmd) {
+        agg.on_off = cmd.address;
+        agg.consumedIds.add(cmd.id);
+      }
+      if (st) {
+        agg.on_off_state = st.address;
+        agg.consumedIds.add(st.id);
+      }
+    }
+
+    if (dimming.length) {
+      agg.dimming = dimming[0].address;
+      agg.consumedIds.add(dimming[0].id);
+    }
+
+    if (bright.length) {
+      const st = bright.find((g) => isStatus(g) || isReadFlag(g.id));
+      const cmd = bright.find((g) => !(isStatus(g) || isReadFlag(g.id))) || bright[0];
+      if (cmd) {
+        agg.brightness = cmd.address;
+        agg.consumedIds.add(cmd.id);
+      }
+      if (st) {
+        agg.brightness_state = st.address;
+        agg.consumedIds.add(st.id);
+      }
+    }
+
+    if (agg.on_off || agg.brightness || agg.dimming) out.push(agg);
+  });
+
+  return out;
+}
+
 /** ====================== SWITCH AGGREGATE ====================== */
 function isStatusName(name: string): boolean {
   return STATUS_RE.test(name);
@@ -74,12 +231,25 @@ export interface SwitchAggregate {
   consumedIds: Set<string>;
 }
 
-export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
+export function buildSwitchAggregates(
+  gas: GroupAddress[],
+  linksByGa?: Map<string, KnxLinkInfo>
+): SwitchAggregate[] {
   const byBase = new Map<string, SwitchAggregate>();
 
   for (const ga of gas) {
+    // Do not treat central 0/1/* group addresses as switches; these are scenes
+    if (ga.address?.startsWith("0/1/")) continue;
+
     const dpt = normalizeDptToHyphen(ga.dpt);
     if (dpt !== "1-1") continue;
+
+  // Skip names that clearly indicate a scene so they'll map as scene later
+  if (isSceneLikeName(ga.name)) continue;
+
+    // Skip lighting central 'waarde sturen' middle 7 to avoid conflicting with scenes test data
+    const parts = parseAddress(ga.address);
+    if (parts && parts.main === 1 && parts.middle === 7) continue;
 
     const base = normalizeBaseName(ga.name);
     let agg = byBase.get(base);
@@ -99,7 +269,57 @@ export function buildSwitchAggregates(gas: GroupAddress[]): SwitchAggregate[] {
       agg.consumedIds.add(ga.id);
     }
   }
-  return Array.from(byBase.values()).filter((a) => !!a.address);
+  const result = Array.from(byBase.values()).filter((a) => !!a.address);
+
+  if (!linksByGa) return result;
+
+  // Link-driven pairing: if a switch has no state, try to find a matching state GA in same context
+  const contextOf = (gaId?: string): string | undefined => {
+    if (!gaId) return undefined;
+    const l = linksByGa.get(gaId);
+    return l?.comObject || l?.context;
+  };
+  const isReadFlag = (gaId: string): boolean => {
+    const l = linksByGa.get(gaId);
+    const f = l?.flags || {};
+    const v = f["ReadFlag"];
+    return v === true || v === "true";
+  };
+
+  for (const agg of result) {
+    if (agg.state_address) continue;
+    if (!agg.address) continue;
+
+    // Find GA id for command
+    const cmdGa = gas.find((g) => g.address === agg.address);
+    if (!cmdGa) continue;
+    const cmdCtx = contextOf(cmdGa.id);
+    if (!cmdCtx) continue;
+
+    // Candidates: same context, DPT 1-1, not the same GA
+    const candidates: GroupAddress[] = [];
+    for (const g of gas) {
+      if (g.id === cmdGa.id) continue;
+      const dpt = normalizeDptToHyphen(g.dpt);
+      if (dpt !== "1-1") continue;
+      const ctx = contextOf(g.id);
+      if (!ctx) continue;
+      if (ctx !== cmdCtx) continue;
+      candidates.push(g);
+    }
+
+    // Prefer ones marked with ReadFlag or name indicating status
+    let chosen: GroupAddress | undefined = candidates.find((g) => isReadFlag(g.id));
+    if (!chosen) chosen = candidates.find((g) => isStatusName(g.name));
+    if (!chosen) chosen = candidates[0];
+
+    if (chosen) {
+      agg.state_address = chosen.address;
+      agg.consumedIds.add(chosen.id);
+    }
+  }
+
+  return result;
 }
 
 export function collectConsumedIds(
@@ -271,7 +491,10 @@ interface CoverEntryMeta {
   hasInvert: boolean;
 }
 
-export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
+export function buildCoverAggregates(
+  gas: GroupAddress[],
+  linksByGa?: Map<string, KnxLinkInfo>
+): CoverAggregate[] {
   const groups = new Map<
     string,
     {
@@ -406,6 +629,64 @@ export function buildCoverAggregates(gas: GroupAddress[]): CoverAggregate[] {
     }
   });
 
+  // Link-driven fill-ins for missing state addresses
+  if (linksByGa) {
+    const contextOf = (gaId: string): string | undefined => {
+      const l = linksByGa.get(gaId);
+      return l?.comObject || l?.context;
+    };
+    const isReadFlag = (gaId: string): boolean => {
+      const f = linksByGa.get(gaId)?.flags || {};
+      const v = f["ReadFlag"];
+      return v === true || v === "true";
+    };
+    // Build lookup by address -> GA
+    const byAddress = new Map(gas.map((g) => [g.address, g] as const));
+    const groupByContext = new Map<string, GroupAddress[]>();
+    for (const g of gas) {
+      const ctx = contextOf(g.id);
+      if (!ctx) continue;
+      const arr = groupByContext.get(ctx) ?? [];
+      arr.push(g);
+      groupByContext.set(ctx, arr);
+    }
+
+    for (const agg of aggregates) {
+      const seedAddr =
+        agg.position_address ||
+        agg.angle_address ||
+        agg.move_long_address ||
+        agg.move_short_address ||
+        agg.stop_address;
+      if (!seedAddr) continue;
+      const seedGa = byAddress.get(seedAddr);
+      if (!seedGa) continue;
+      const ctx = contextOf(seedGa.id);
+      if (!ctx) continue;
+      const peers = groupByContext.get(ctx) ?? [];
+
+      if (agg.position_address && !agg.position_state_address) {
+        const cand = peers
+          .filter((g) => normalizeDptToHyphen(g.dpt)?.startsWith("5-") && (RE_STATUS2.test(g.name) || isReadFlag(g.id)))
+          .find((g) => normalizeDptToHyphen(g.dpt) === "5-1");
+        if (cand) {
+          agg.position_state_address = cand.address;
+          agg.consumedIds.add(cand.id);
+        }
+      }
+
+      if (agg.angle_address && !agg.angle_state_address) {
+        const cand = peers
+          .filter((g) => normalizeDptToHyphen(g.dpt)?.startsWith("5-") && (RE_STATUS2.test(g.name) || isReadFlag(g.id)))
+          .find((g) => normalizeDptToHyphen(g.dpt) === "5-3");
+        if (cand) {
+          agg.angle_state_address = cand.address;
+          agg.consumedIds.add(cand.id);
+        }
+      }
+    }
+  }
+
   return aggregates;
 }
 
@@ -427,7 +708,15 @@ function assignCoverValue(
 }
 
 export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
-  const t = guessEntityType(ga.dpt, ga.name);
+  // Treat central 0/1/* addresses as scenes, regardless of DPT
+  if (ga.address?.startsWith("0/1/")) {
+    const m = ga.name.match(/\b(\d{1,2})\b/);
+    const scene_number = m ? parseInt(m[1], 10) : undefined;
+    const payload = { name: ga.name, address: ga.address, scene_number };
+    return { domain: "scene", payload } as MappedEntity;
+  }
+
+  const t = guessEntityType(ga.dpt, ga.name, ga.address);
   const dptHyphen = normalizeDptToHyphen(ga.dpt);
 
   if (t === "switch") {
@@ -456,6 +745,13 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
       };
       return { domain: "sensor", payload };
     }
+  }
+
+  if (t === "scene") {
+    const m = ga.name.match(/\b(\d{1,2})\b/);
+    const scene_number = m ? parseInt(m[1], 10) : undefined;
+    const payload = { name: ga.name, address: ga.address, scene_number };
+    return { domain: "scene", payload } as MappedEntity;
   }
 
   if (t === "sensor") {
