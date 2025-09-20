@@ -9,6 +9,7 @@ export interface GroupAddress {
 export interface KnxCatalog {
   project_name?: string | null;
   group_addresses: GroupAddress[];
+  links?: KnxLinkInfo[];
 }
 
 export type HAType =
@@ -20,6 +21,7 @@ export type HAType =
   | "time"
   | "date"
   | "datetime"
+  | "scene"
   | "unknown";
 
 export interface HaSwitch {
@@ -95,6 +97,12 @@ export interface HaCover {
   travelling_time_down?: number;
 }
 
+export interface HaScene {
+  name?: string;
+  address: string;
+  scene_number?: number;
+}
+
 export interface UnknownEntity {
   name: string;
   address: string;
@@ -110,6 +118,7 @@ export type MappedEntity =
   | { domain: "date"; payload: HaDate }
   | { domain: "datetime"; payload: HaDateTime }
   | { domain: "cover"; payload: HaCover }
+  | { domain: "scene"; payload: HaScene }
   | { domain: "_unknown"; payload: UnknownEntity };
 
 export interface ExportOptions {
@@ -124,4 +133,12 @@ export interface LightAggregate {
   brightness_state?: string;
   dimming?: string;
   consumedIds: Set<string>;
+}
+
+export interface KnxLinkInfo {
+  gaId: string;
+  context?: string;
+  comObject?: string;
+  dpt?: string;
+  flags?: Record<string, boolean | string>;
 }

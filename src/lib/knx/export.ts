@@ -15,11 +15,14 @@ import {
 } from "../types";
 import {
   buildLaLightAggregates,
+  buildLinkedLightAggregates,
+  buildAddressLightAggregates,
   buildSwitchAggregates,
   buildCoverAggregates,
   collectConsumedIds,
   mapSingleGaToEntity,
 } from "./aggregate";
+import { KnxLinkInfo, HaScene } from "../types";
 
 export interface HaEntities {
   switches: HaSwitch[];
@@ -31,12 +34,14 @@ export interface HaEntities {
   datetimes: HaDateTime[];
   covers: HaCover[];
   unknowns: UnknownEntity[];
+  scenes: HaScene[];
 }
 
 export function buildHaEntities(
   catalog: KnxCatalog,
   opts: ExportOptions = {}
 ): HaEntities {
+  const dropReserve = Boolean(opts.dropReserveFromUnknown);
   const switches: HaSwitch[] = [];
   const binarySensors: HaBinarySensor[] = [];
   const lights: HaLight[] = [];
@@ -46,26 +51,46 @@ export function buildHaEntities(
   const datetimes: HaDateTime[] = [];
   const covers: HaCover[] = [];
   const unknowns: UnknownEntity[] = [];
+  const scenes: HaScene[] = [];
 
-  const laAggs = buildLaLightAggregates(catalog.group_addresses);
+  // Optional: use link contexts to improve pairing
+  const linksByGa = catalog.links && catalog.links.length
+    ? new Map<string, KnxLinkInfo>(catalog.links.map((l) => [l.gaId, l]))
+    : undefined;
+
+  // Link-driven aggregates
+  const linkedLaAggs = buildLinkedLightAggregates(
+    catalog.group_addresses,
+    linksByGa
+  );
+  const addrAggs = linkedLaAggs.length
+    ? []
+    : buildAddressLightAggregates(catalog.group_addresses);
+  const laAggs = linkedLaAggs.length
+    ? linkedLaAggs
+    : addrAggs.length
+    ? addrAggs
+    : buildLaLightAggregates(catalog.group_addresses);
   for (const a of laAggs) {
     if (!a.on_off) continue;
     const entry: HaLight = { name: a.name, address: a.on_off };
     if (a.on_off_state) entry.state_address = a.on_off_state;
     if (a.brightness) entry.brightness_address = a.brightness;
     if (a.brightness_state) entry.brightness_state_address = a.brightness_state;
-    lights.push(entry);
+    if (!(dropReserve && (entry.name ?? "").trim().toLowerCase() === "reserve"))
+      lights.push(entry);
   }
 
-  const switchAggs = buildSwitchAggregates(catalog.group_addresses);
+  const switchAggs = buildSwitchAggregates(catalog.group_addresses, linksByGa);
   for (const s of switchAggs) {
     const entry: HaSwitch = { name: s.name, address: s.address! };
     if (s.state_address) entry.state_address = s.state_address;
     else entry.respond_to_read = true;
-    switches.push(entry);
+    if (!(dropReserve && (entry.name ?? "").trim().toLowerCase() === "reserve"))
+      switches.push(entry);
   }
 
-  const coverAggs = buildCoverAggregates(catalog.group_addresses);
+  const coverAggs = buildCoverAggregates(catalog.group_addresses, linksByGa);
   for (const c of coverAggs) {
     const entry: HaCover = { name: c.name };
     if (c.move_long_address) entry.move_long_address = c.move_long_address;
@@ -79,7 +104,8 @@ export function buildHaEntities(
       entry.angle_state_address = c.angle_state_address;
     if (c.invert_position) entry.invert_position = true;
     if (c.invert_angle) entry.invert_angle = true;
-    covers.push(entry);
+    if (!(dropReserve && (entry.name ?? "").trim().toLowerCase() === "reserve"))
+      covers.push(entry);
   }
 
   const consumed = collectConsumedIds(laAggs, switchAggs, coverAggs);
@@ -89,28 +115,40 @@ export function buildHaEntities(
     const mapped = mapSingleGaToEntity(ga);
     switch (mapped.domain) {
       case "switch":
-        switches.push(mapped.payload);
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          switches.push(mapped.payload);
         break;
       case "binary_sensor":
-        binarySensors.push(mapped.payload);
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          binarySensors.push(mapped.payload);
         break;
       case "light":
-        lights.push(mapped.payload);
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          lights.push(mapped.payload);
         break;
       case "sensor":
-        sensors.push(mapped.payload);
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          sensors.push(mapped.payload);
         break;
       case "time":
-        times.push(mapped.payload);
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          times.push(mapped.payload);
         break;
       case "date":
-        dates.push(mapped.payload);
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          dates.push(mapped.payload);
         break;
       case "datetime":
-        datetimes.push(mapped.payload);
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          datetimes.push(mapped.payload);
         break;
       case "cover":
-        covers.push(mapped.payload);
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          covers.push(mapped.payload);
+        break;
+      case "scene":
+        if (!(dropReserve && (mapped.payload.name ?? "").trim().toLowerCase() === "reserve"))
+          scenes.push(mapped.payload);
         break;
       case "_unknown":
         unknowns.push(mapped.payload);
@@ -118,7 +156,7 @@ export function buildHaEntities(
     }
   }
 
-  const finalUnknowns = opts.dropReserveFromUnknown
+  const finalUnknowns = dropReserve
     ? unknowns.filter((x) => x.name.trim().toLowerCase() !== "reserve")
     : unknowns;
 
@@ -131,6 +169,7 @@ export function buildHaEntities(
     dates,
     datetimes,
     covers,
+    scenes,
     unknowns: finalUnknowns,
   };
 }
@@ -186,6 +225,7 @@ function entitiesToYaml(doc: Document.Parsed, ent: HaEntities): YAMLMap {
   if (ent.datetimes.length)
     knx.set("datetime", domainListToYaml(doc, ent.datetimes));
   if (ent.covers.length) knx.set("cover", domainListToYaml(doc, ent.covers));
+  if (ent.scenes.length) knx.set("scene", domainListToYaml(doc, ent.scenes));
   if (ent.unknowns.length)
     knx.set("_unknown", domainListToYaml(doc, ent.unknowns));
 
@@ -233,6 +273,7 @@ export interface EntitySummary {
     date: number;
     datetime: number;
     cover: number;
+    scene: number;
     _unknown: number;
     total: number;
   };
@@ -249,6 +290,7 @@ export function summarizeEntities(ent: HaEntities): EntitySummary {
     date: ent.dates.length,
     datetime: ent.datetimes.length,
     cover: ent.covers.length,
+    scene: ent.scenes.length,
     _unknown: ent.unknowns.length,
     total:
       ent.switches.length +
@@ -259,6 +301,7 @@ export function summarizeEntities(ent: HaEntities): EntitySummary {
       ent.dates.length +
       ent.datetimes.length +
       ent.covers.length +
+      ent.scenes.length +
       ent.unknowns.length,
   };
 

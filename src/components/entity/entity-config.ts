@@ -12,6 +12,7 @@ export const DOMAIN_BY_COLLECTION = {
   dates: "date",
   datetimes: "datetime",
   covers: "cover",
+  scenes: "scene",
   unknowns: "_unknown",
 } as const;
 
@@ -26,6 +27,7 @@ export type DomainEntityMap = {
   date: Entities["dates"][number];
   datetime: Entities["datetimes"][number];
   cover: Entities["covers"][number];
+  scene: Entities["scenes"][number];
   _unknown: Entities["unknowns"][number];
 };
 
@@ -76,6 +78,10 @@ export function entityPrimaryIdentifier<D extends EntityDomain>(
       typed.stop_address ??
       null
     );
+  }
+  if (domain === "scene") {
+    const typed = entity as DomainEntityMap["scene"];
+    return typed.address ?? null;
   }
   if (domain === "_unknown") {
     const typed = entity as DomainEntityMap["_unknown"];

@@ -18,6 +18,7 @@ export default function StatsBar({ summary }: { summary: EntitySummary }) {
         <Badge variant="outline">date: {summary.counts.date}</Badge>
         <Badge variant="outline">datetime: {summary.counts.datetime}</Badge>
         <Badge variant="outline">cover: {summary.counts.cover}</Badge>
+        <Badge variant="outline">scene: {summary.counts.scene}</Badge>
         {summary.counts._unknown > 0 && (
           <Badge
             variant="outline"

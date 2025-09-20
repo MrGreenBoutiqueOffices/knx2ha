@@ -46,11 +46,8 @@ export default function OptionsBar({
             onCheckedChange={onToggleReserve}
             disabled={busy}
           />
-          <Label
-            htmlFor="opt-reserve"
-            className="cursor-pointer text-sm leading-none"
-          >
-            Filter <code>Reserve</code> from <code>_unknown</code>
+          <Label htmlFor="opt-reserve" className="cursor-pointer text-sm leading-none">
+            Filter <code>Reserve</code> entities
           </Label>
         </div>
       </div>
