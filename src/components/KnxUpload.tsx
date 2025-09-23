@@ -32,6 +32,7 @@ import ProgressInfo from "./knx/ProgressInfo";
 import StatsBar from "./knx/StatsBar";
 import CodePanel from "./knx/CodePanel";
 import EntityConfigurator from "./entity/EntityConfigurator";
+import ThemeToggle from "@/components/ThemeToggle";
 import {
   DOMAIN_BY_COLLECTION,
   applyEntityOverride,
@@ -58,8 +59,11 @@ export default function KnxUpload() {
   const groupAddressCount = useMemo(() => {
     if (!catalog) return 0;
     if (catalog.groupAddresses?.flat) return catalog.groupAddresses.flat.length;
-    const maybeLegacy = catalog as unknown as { group_addresses?: Array<{ id: string }> };
-    if (Array.isArray(maybeLegacy.group_addresses)) return maybeLegacy.group_addresses.length;
+    const maybeLegacy = catalog as unknown as {
+      group_addresses?: Array<{ id: string }>;
+    };
+    if (Array.isArray(maybeLegacy.group_addresses))
+      return maybeLegacy.group_addresses.length;
     return 0;
   }, [catalog]);
 
@@ -199,14 +203,22 @@ export default function KnxUpload() {
   );
 
   const addressIndex = useMemo(() => {
-    const idx: Record<string, { name?: string; dpt?: string; id?: string }> = {};
+    const idx: Record<string, { name?: string; dpt?: string; id?: string }> =
+      {};
     if (!catalog) return idx;
     if (catalog.groupAddresses?.flat) {
       for (const ga of catalog.groupAddresses.flat) {
         idx[ga.address] = { name: ga.name, dpt: ga.datapointType, id: ga.id };
       }
     } else {
-      const maybeLegacy = catalog as unknown as { group_addresses?: Array<{ id: string; name?: string; address: string; dpt?: string }> };
+      const maybeLegacy = catalog as unknown as {
+        group_addresses?: Array<{
+          id: string;
+          name?: string;
+          address: string;
+          dpt?: string;
+        }>;
+      };
       if (Array.isArray(maybeLegacy.group_addresses)) {
         for (const ga of maybeLegacy.group_addresses) {
           idx[ga.address] = { name: ga.name, dpt: ga.dpt, id: ga.id };
@@ -216,7 +228,10 @@ export default function KnxUpload() {
     return idx;
   }, [catalog]);
 
-  const catalogYaml = useMemo(() => (catalog ? toCatalogYaml(catalog) : ""), [catalog]);
+  const catalogYaml = useMemo(
+    () => (catalog ? toCatalogYaml(catalog) : ""),
+    [catalog]
+  );
 
   const haYaml = useMemo(
     () => (adjustedEntities ? haEntitiesToYaml(adjustedEntities) : ""),
@@ -299,6 +314,7 @@ export default function KnxUpload() {
               </h1>
             </div>
             <div className="ms-auto flex items-center gap-2">
+              <ThemeToggle />
               {catalog && <Badge variant="secondary">{projectName}</Badge>}
               {catalog && (
                 <Badge variant="outline">{groupAddressCount} GA&apos;s</Badge>
