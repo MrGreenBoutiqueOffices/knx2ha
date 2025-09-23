@@ -11,7 +11,9 @@ import {
   HaDateTime,
   HaCover,
   UnknownEntity,
-  GroupAddress,
+  KnxFlags,
+  KnxGroupLevel,
+  KnxGroupAddress,
 } from "../types";
 import {
   buildLaLightAggregates,
@@ -22,6 +24,7 @@ import {
   collectConsumedIds,
   mapSingleGaToEntity,
 } from "./aggregate";
+import { buildEntitiesFromCatalog } from "./map";
 import { KnxLinkInfo, HaScene } from "../types";
 
 export interface HaEntities {
@@ -41,6 +44,47 @@ export function buildHaEntities(
   catalog: KnxCatalog,
   opts: ExportOptions = {}
 ): HaEntities {
+  // If rich catalog (devices/channels/com objects present), prefer structured mapping
+  const isRich = Boolean(catalog.devices && catalog.devices.length && catalog.groupAddresses?.flat?.length);
+  if (isRich) {
+    const mapped = buildEntitiesFromCatalog(catalog);
+    const ent: HaEntities = {
+      switches: [],
+      binarySensors: [],
+      lights: [],
+      sensors: [],
+      times: [],
+      dates: [],
+      datetimes: [],
+      covers: [],
+      unknowns: [],
+      scenes: [],
+    };
+    for (const m of mapped) {
+      if (m.domain === "switch") ent.switches.push(m.payload);
+      else if (m.domain === "binary_sensor") ent.binarySensors.push(m.payload);
+      else if (m.domain === "light") ent.lights.push(m.payload);
+      else if (m.domain === "sensor") ent.sensors.push(m.payload);
+      else if (m.domain === "time") ent.times.push(m.payload);
+      else if (m.domain === "date") ent.dates.push(m.payload);
+      else if (m.domain === "datetime") ent.datetimes.push(m.payload);
+      else if (m.domain === "cover") ent.covers.push(m.payload);
+      else if (m.domain === "scene") ent.scenes.push(m.payload);
+      else if (m.domain === "_unknown") ent.unknowns.push(m.payload);
+    }
+    const total =
+      ent.switches.length +
+      ent.binarySensors.length +
+      ent.lights.length +
+      ent.sensors.length +
+      ent.times.length +
+      ent.dates.length +
+      ent.datetimes.length +
+      ent.covers.length +
+      ent.scenes.length +
+      ent.unknowns.length;
+    if (total > 0) return ent;
+  }
   const dropReserve = Boolean(opts.dropReserveFromUnknown);
   const switches: HaSwitch[] = [];
   const binarySensors: HaBinarySensor[] = [];
@@ -247,20 +291,196 @@ export function haEntitiesToYaml(ent: HaEntities): string {
   return String(doc);
 }
 
-export function toCatalogYaml(catalog: KnxCatalog): string {
-  return YAML.stringify(
-    {
-      project_name: catalog.project_name ?? null,
-      group_addresses: catalog.group_addresses.map((ga: GroupAddress) => ({
-        id: ga.id,
-        name: ga.name,
-        address: ga.address,
-        dpt: ga.dpt,
-        description: ga.description,
+type LegacyGA = { id: string; name?: string; address: string; dpt?: string; description?: string };
+type LegacyCatalog = { project_name?: string; group_addresses?: LegacyGA[] };
+
+export function toCatalogYaml(catalog: KnxCatalog | LegacyCatalog): string {
+  // Backward-compatible path: if rich structures are missing, emit legacy minimal YAML
+  // Expected by older tests/consumers that only provide catalog.group_addresses and project_name
+  const isRich = (c: KnxCatalog | LegacyCatalog): c is KnxCatalog =>
+    "topology" in c && "groupAddresses" in c && !!(c as KnxCatalog).groupAddresses;
+
+  if (!isRich(catalog)) {
+    const projectName = catalog.project_name ?? "Unknown";
+    const list = catalog.group_addresses ?? [];
+    return YAML.stringify(
+      {
+        project_name: projectName,
+        group_addresses: list.map((ga) => ({
+          id: ga.id,
+          name: ga.name,
+          address: ga.address,
+          dpt: ga.dpt,
+          description: ga.description,
+        })),
+      },
+      { aliasDuplicateObjects: false }
+    );
+  }
+  // Canonicalize flags (prefer normalized keys if present; otherwise map common *Flag names)
+  const canonFlags = (flags?: KnxFlags) => {
+    if (!flags) return undefined;
+    const read = (flags as KnxFlags).read ?? (flags as KnxFlags)["ReadFlag"];
+    const write = (flags as KnxFlags).write ?? (flags as KnxFlags)["WriteFlag"];
+    const transmit = (flags as KnxFlags).transmit ?? (flags as KnxFlags)["TransmitFlag"];
+    const update = (flags as KnxFlags).update ?? (flags as KnxFlags)["UpdateFlag"];
+    const readOnInit = (flags as KnxFlags).readOnInit ?? (flags as KnxFlags)["ReadOnInitFlag"];
+    const out: Record<string, boolean> = {};
+    if (read !== undefined) out.read = Boolean(read);
+    if (write !== undefined) out.write = Boolean(write);
+    if (transmit !== undefined) out.transmit = Boolean(transmit);
+    if (update !== undefined) out.update = Boolean(update);
+    if (readOnInit !== undefined) out.readOnInit = Boolean(readOnInit);
+    return Object.keys(out).length ? out : undefined;
+  };
+
+  const meta = {
+    project_name: catalog.meta.name ?? "Unknown",
+    ets_version: catalog.meta.etsVersion ?? null,
+    created_at: catalog.meta.createdAt ?? null,
+    modified_at: catalog.meta.modifiedAt ?? null,
+  };
+
+  // Topology
+  const topology = {
+    areas: catalog.topology.areas.map((area) => ({
+      id: area.id,
+      name: area.name,
+      lines: area.lines.map((line) => ({
+        id: line.id,
+        name: line.name,
+        devices_count: line.devices.length,
       })),
+    })),
+  };
+
+  // Group address tree with items
+  type LevelOut = { id: string; name?: string; children?: LevelOut[]; items?: Array<{
+    id: string;
+    address: string;
+    name?: string;
+    description?: string;
+    dpt?: string;
+    flags?: Record<string, boolean>;
+    security?: { is_secure?: boolean; keyring_ref?: string };
+    priority?: string;
+    bit_length?: number;
+  }>; };
+
+  const mapLevel = (lvl: KnxGroupLevel): LevelOut => ({
+    id: lvl.id,
+    name: lvl.name,
+    children: (lvl.children || []).map(mapLevel),
+    ...(lvl.items && lvl.items.length
+      ? {
+          items: lvl.items.map((ga: KnxGroupAddress) => ({
+            id: ga.id,
+            address: ga.address,
+            name: ga.name,
+            description: ga.description,
+            dpt: ga.datapointType,
+            ...(ga.flags ? { flags: canonFlags(ga.flags) } : {}),
+            ...(ga.security
+              ? {
+                  security: {
+                    is_secure: Boolean(ga.security.isSecure),
+                    ...(ga.security.keyringRef
+                      ? { keyring_ref: ga.security.keyringRef }
+                      : {}),
+                  },
+                }
+              : {}),
+            ...(ga.priority ? { priority: ga.priority } : {}),
+            ...(ga.bitLength !== undefined ? { bit_length: ga.bitLength } : {}),
+          })),
+        }
+      : {}),
+  });
+
+  const group_addresses = {
+    tree: (catalog.groupAddresses.tree.mainGroups || []).map(mapLevel),
+  };
+
+  // Devices
+  const devices = catalog.devices.map((dev) => ({
+    id: dev.id,
+    name: dev.name,
+    address: dev.address,
+    manufacturer_ref: dev.manufacturerRef,
+    application_program_ref: dev.applicationProgramRef,
+    ...(dev.parameters && Object.keys(dev.parameters).length
+      ? { parameters: dev.parameters }
+      : {}),
+    channels: dev.channels.map((ch) => ({
+      id: ch.id,
+      name: ch.name,
+      com_objects: ch.comObjects.map((co) => ({
+        id: co.id,
+        name: co.name,
+        number: co.number,
+        dpt: co.datapointType,
+        ...(co.bitLength !== undefined ? { bit_length: co.bitLength } : {}),
+        ...(co.flags ? { flags: canonFlags(co.flags) } : {}),
+        group_address_refs: (co.groupAddressRefs || []).map((ref) => ({
+          role: ref.role,
+          group_address_id: ref.groupAddressId,
+        })),
+      })),
+    })),
+    // Device-level com objects (if any)
+    ...(dev.comObjects && dev.comObjects.length
+      ? {
+          com_objects: dev.comObjects.map((co) => ({
+            id: co.id,
+            name: co.name,
+            number: co.number,
+            dpt: co.datapointType,
+            ...(co.bitLength !== undefined ? { bit_length: co.bitLength } : {}),
+            ...(co.flags ? { flags: canonFlags(co.flags) } : {}),
+            group_address_refs: (co.groupAddressRefs || []).map((ref) => ({
+              role: ref.role,
+              group_address_id: ref.groupAddressId,
+            })),
+          })),
+        }
+      : {}),
+  }));
+
+  // Indexes
+  const indexes = {
+    group_addresses_by_id: Object.fromEntries(
+      Object.entries(catalog.indexes.groupAddressesById).map(([id, ga]) => [
+        id,
+        { address: ga.address, name: ga.name },
+      ])
+    ),
+    com_objects_by_id: Object.fromEntries(
+      Object.entries(catalog.indexes.comObjectsById).map(([id, co]) => [
+        id,
+        {
+          device_id: co.deviceId,
+          channel_id: co.channelId,
+          dpt: co.datapointType,
+        },
+      ])
+    ),
+  };
+
+  const stats = {
+    totals: catalog.stats.totals,
+    dpt_usage: catalog.stats.dptUsage,
+    secure: {
+      has_secure: catalog.stats.secure.hasSecure,
+      secure_ga_count: catalog.stats.secure.secureGroupAddressCount,
     },
-    { aliasDuplicateObjects: false }
-  );
+  };
+
+  const out = { meta, topology, group_addresses, devices, indexes, stats };
+  return YAML.stringify(out, { aliasDuplicateObjects: false });
+}
+
+export function toReportJson(catalog: KnxCatalog): string {
+  return JSON.stringify(catalog.report, null, 2);
 }
 
 export interface EntitySummary {
