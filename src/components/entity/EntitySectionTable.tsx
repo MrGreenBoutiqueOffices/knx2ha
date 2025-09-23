@@ -56,11 +56,27 @@ export type EntityChangeHandler = (
 
 export type EntityResetHandler = (key: string) => void;
 
-function PrimaryCell({ value }: { value: string }) {
+function PrimaryCell({ value, addressIndex }: { value: string; addressIndex?: Record<string, { name?: string; dpt?: string; id?: string }> }) {
   if (!value) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
-  return <code className="text-xs text-muted-foreground">{value}</code>;
+  const info = addressIndex?.[value];
+  const codeNode = (
+    <code className="text-xs text-muted-foreground">{value}</code>
+  );
+  if (!info) return codeNode;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{codeNode}</TooltipTrigger>
+      <TooltipContent>
+        <div className="flex flex-col text-xs">
+          <span className="font-medium">{info.name ?? "Unnamed GA"}</span>
+          {info.dpt ? <span className="text-muted-foreground">DPT {info.dpt}</span> : null}
+          {info.id ? <span className="text-muted-foreground">ID {info.id}</span> : null}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 interface AddressBadgeProps {
@@ -83,21 +99,37 @@ function AddressBadge({ label, value, intent = "normal" }: AddressBadgeProps) {
   );
 }
 
-function AddressBadgeList({ items }: { items: AddressBadgeProps[] }) {
+function AddressBadgeList({ items, addressIndex }: { items: AddressBadgeProps[]; addressIndex?: Record<string, { name?: string; dpt?: string; id?: string }> }) {
   const visible = items.filter((item) => item.value);
   if (!visible.length) {
     return <span className="text-[0.7rem] text-muted-foreground">—</span>;
   }
   return (
     <div className="flex flex-wrap gap-1">
-      {visible.map((item) => (
-        <AddressBadge
-          key={`${item.label}-${item.value}`}
-          label={item.label}
-          value={item.value}
-          intent={item.intent ?? (item.label === "_unknown" ? "warning" : "normal")}
-        />
-      ))}
+      {visible.map((item) => {
+        const info = item.value ? addressIndex?.[item.value] : undefined;
+        const badge = (
+          <AddressBadge
+            key={`${item.label}-${item.value}`}
+            label={item.label}
+            value={item.value}
+            intent={item.intent ?? (item.label === "_unknown" ? "warning" : "normal")}
+          />
+        );
+        if (!info) return badge;
+        return (
+          <Tooltip key={`${item.label}-${item.value}`}>
+            <TooltipTrigger asChild>{badge}</TooltipTrigger>
+            <TooltipContent>
+              <div className="flex flex-col text-xs">
+                <span className="font-medium">{info.name ?? "Unnamed GA"}</span>
+                {info.dpt ? <span className="text-muted-foreground">DPT {info.dpt}</span> : null}
+                {info.id ? <span className="text-muted-foreground">ID {info.id}</span> : null}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }
@@ -141,6 +173,7 @@ export function buildRows(
 
 function createColumns(
   domain: EntityDomain,
+  addressIndex: Record<string, { name?: string; dpt?: string; id?: string }> | undefined,
   onChange: EntityChangeHandler,
   onReset: EntityResetHandler
 ): ColumnDef<EntityTableRow>[] {
@@ -167,7 +200,7 @@ function createColumns(
     {
       accessorKey: "primary",
       header: "Primary GA",
-      cell: ({ row }) => <PrimaryCell value={row.original.primary} />,
+      cell: ({ row }) => <PrimaryCell value={row.original.primary} addressIndex={addressIndex} />,
     },
   ];
 
@@ -186,6 +219,7 @@ function createColumns(
         const entity = row.original.base as DomainEntityMap["cover"];
         return (
           <AddressBadgeList
+            addressIndex={addressIndex}
             items={[
               { label: "long", value: entity.move_long_address },
               { label: "short", value: entity.move_short_address },
@@ -209,6 +243,7 @@ function createColumns(
         const entity = row.original.base as DomainEntityMap["cover"];
         return (
           <AddressBadgeList
+            addressIndex={addressIndex}
             items={[
               { label: "cmd", value: entity.position_address },
               { label: "state", value: entity.position_state_address },
@@ -231,6 +266,7 @@ function createColumns(
         const entity = row.original.base as DomainEntityMap["cover"];
         return (
           <AddressBadgeList
+            addressIndex={addressIndex}
             items={[
               { label: "cmd", value: entity.angle_address },
               { label: "state", value: entity.angle_state_address },
@@ -309,7 +345,7 @@ function createColumns(
       header: "Command",
       cell: ({ row }) => {
         const entity = row.original.base as DomainEntityMap["switch"];
-        return <PrimaryCell value={entity.address ?? ""} />;
+        return <PrimaryCell value={entity.address ?? ""} addressIndex={addressIndex} />;
       },
     });
     columns.push({
@@ -317,7 +353,7 @@ function createColumns(
       header: "State",
       cell: ({ row }) => {
         const entity = row.original.base as DomainEntityMap["switch"];
-        return <PrimaryCell value={entity.state_address ?? ""} />;
+        return <PrimaryCell value={entity.state_address ?? ""} addressIndex={addressIndex} />;
       },
     });
     columns.push({
@@ -343,7 +379,7 @@ function createColumns(
       header: "State",
       cell: ({ row }) => {
         const entity = row.original.base as DomainEntityMap["binary_sensor"];
-        return <PrimaryCell value={entity.state_address ?? ""} />;
+        return <PrimaryCell value={entity.state_address ?? ""} addressIndex={addressIndex} />;
       },
     });
   }
@@ -357,7 +393,7 @@ function createColumns(
           | DomainEntityMap["time"]
           | DomainEntityMap["date"]
           | DomainEntityMap["datetime"];
-        return <PrimaryCell value={entity.state_address ?? ""} />;
+        return <PrimaryCell value={entity.state_address ?? ""} addressIndex={addressIndex} />;
       },
     });
   }
@@ -368,7 +404,7 @@ function createColumns(
       header: "Command",
       cell: ({ row }) => {
         const entity = row.original.base as DomainEntityMap["light"];
-        return <PrimaryCell value={entity.address ?? ""} />;
+        return <PrimaryCell value={entity.address ?? ""} addressIndex={addressIndex} />;
       },
     });
     columns.push({
@@ -376,7 +412,7 @@ function createColumns(
       header: "State",
       cell: ({ row }) => {
         const entity = row.original.base as DomainEntityMap["light"];
-        return <PrimaryCell value={entity.state_address ?? ""} />;
+        return <PrimaryCell value={entity.state_address ?? ""} addressIndex={addressIndex} />;
       },
     });
     columns.push({
@@ -391,7 +427,7 @@ function createColumns(
       ),
       cell: ({ row }) => {
         const entity = row.original.base as DomainEntityMap["light"];
-        return <PrimaryCell value={entity.brightness_address ?? ""} />;
+        return <PrimaryCell value={entity.brightness_address ?? ""} addressIndex={addressIndex} />;
       },
     });
   }
@@ -402,7 +438,7 @@ function createColumns(
       header: "Address",
       cell: ({ row }) => {
         const entity = row.original.base as DomainEntityMap["scene"];
-        return <PrimaryCell value={entity.address ?? ""} />;
+        return <PrimaryCell value={entity.address ?? ""} addressIndex={addressIndex} />;
       },
     });
   }
@@ -413,7 +449,7 @@ function createColumns(
       header: "State",
       cell: ({ row }) => {
         const entity = row.original.base as DomainEntityMap["sensor"];
-        return <PrimaryCell value={entity.state_address ?? ""} />;
+        return <PrimaryCell value={entity.state_address ?? ""} addressIndex={addressIndex} />;
       },
     });
     columns.push({
@@ -459,6 +495,7 @@ export interface SectionData {
 
 interface EntitySectionTableProps {
   section: SectionData;
+  addressIndex?: Record<string, { name?: string; dpt?: string; id?: string }>;
   onChange: EntityChangeHandler;
   onReset: EntityResetHandler;
   collapsed: boolean;
@@ -467,14 +504,15 @@ interface EntitySectionTableProps {
 
 export function EntitySectionTable({
   section,
+  addressIndex,
   onChange,
   onReset,
   collapsed,
   onToggle,
 }: EntitySectionTableProps) {
   const columns = useMemo(
-    () => createColumns(section.domain, onChange, onReset),
-    [section.domain, onChange, onReset]
+    () => createColumns(section.domain, addressIndex, onChange, onReset),
+    [section.domain, addressIndex, onChange, onReset]
   );
 
   const table = useReactTable({

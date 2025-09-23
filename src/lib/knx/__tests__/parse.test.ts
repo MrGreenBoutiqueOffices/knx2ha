@@ -82,7 +82,7 @@ describe("parseKnxproj", () => {
     const onProgress = jest.fn();
     const catalog = await parseKnxproj(file, { onProgress });
 
-    expect(catalog.project_name).toBe("Demo Project");
+  expect(catalog.meta.name).toBe("Demo Project");
     expect(catalog.group_addresses).toHaveLength(4);
 
     const addresses = catalog.group_addresses.map((ga) => ga.address);
@@ -108,7 +108,7 @@ describe("parseKnxproj", () => {
     const file = new MemoryFile("fallback.knxproj.zip", zipData);
     const catalog = await parseKnxproj(file);
 
-    expect(catalog.project_name).toBe("MyHouse");
+  expect(catalog.meta.name).toBe("MyHouse");
     expect(catalog.group_addresses[0]?.name).toBe("Fallback");
   });
 
@@ -118,11 +118,93 @@ describe("parseKnxproj", () => {
     const onProgress = jest.fn();
     const catalog = await parseKnxproj(file, { onProgress });
 
-    expect(catalog.project_name).toBe("empty");
+  expect(catalog.meta.name).toBe("empty");
     expect(catalog.group_addresses).toHaveLength(0);
 
     const phases = onProgress.mock.calls.map(([payload]) => payload.phase);
     expect(phases).toContain("load_zip");
     expect(phases).toContain("done");
+  });
+});
+
+describe("parseKnxproj rich structures", () => {
+  it("assembles topology, links and enriches GA dpt from com objects; includes standalone GAs and secure flags", async () => {
+    const xml = `<?xml version="1.0"?>
+<Project Name="Complex">
+  <Topology>
+    <Area Id="area1" Name="Area" Address="1">
+      <Line Id="line1" Name="Line" Address="1.1">
+        <Segment Id="seg1" Name="Seg" Address="1.1.1" />
+        <DeviceInstance Id="dev1" Name="Actuator" Address="1.1.10" ApplicationProgramRefId="app1">
+          <ChannelInstance Id="ch1" Name="Channel 1" Number="1">
+            <ComObjectInstanceRef Id="co1" Name="Switch" Number="1" DatapointType="1.001" RefId="coDef1">
+              <GroupAddressRef RefId="ga1" />
+            </ComObjectInstanceRef>
+            <ComObjectInstanceRef Id="co2" Name="Brightness" Number="2" DatapointType="5.001" RefId="coDef2">
+              <GroupAddressRef RefId="ga2" />
+            </ComObjectInstanceRef>
+            <ComObjectInstanceRef Id="co3" Name="Status" Number="3" DatapointType="1.001" RefId="coDef3">
+              <GroupAddressRef RefId="ga1" />
+            </ComObjectInstanceRef>
+          </ChannelInstance>
+        </DeviceInstance>
+      </Line>
+    </Area>
+  </Topology>
+
+  <GroupRange Id="grMain" Name="Main 1" Address="1">
+    <GroupRange Id="grMid" Name="Middle 1" Address="1">
+      <GroupRange Id="grSub" Name="Sub 1" Address="1">
+        <GroupAddress Id="ga1" Name="LA Woonkamer" Address="1/1/1" DatapointType="1.001" />
+      </GroupRange>
+    </GroupRange>
+  </GroupRange>
+
+  <!-- Standalone GA without DPT, will be enriched from com object -->
+  <GroupAddress Id="ga2" Name="LA Woonkamer Bright" Main="1" Middle="3" Sub="1" />
+  <!-- Secure GA marker -->
+  <GroupAddress Id="ga3" Name="Secure GA" Address="1/5/1" Security="Auth" />
+</Project>`;
+
+    const zipData = makeZip({ "project/complex.xml": xml, "Complex.knxproj": "" });
+    const file = new MemoryFile("complex.knxproj.zip", zipData);
+    const catalog = await parseKnxproj(file);
+
+    // Meta
+    expect(catalog.meta.name).toBe("Complex");
+
+    // Topology assembled
+    expect(catalog.topology.areas).toHaveLength(1);
+    const area = catalog.topology.areas[0];
+    expect(area.lines).toHaveLength(1);
+    const line = area.lines[0];
+    expect(line.devices).toHaveLength(1);
+
+    // Group addresses: both range-based and standalone included
+    const flat = catalog.groupAddresses.flat.map((g) => g.address);
+    expect(flat.sort()).toEqual(["1/1/1", "1/3/1", "1/5/1"].sort());
+
+    // Legacy compat list is populated and DPT is enriched from com object for ga2
+    const byId = new Map(catalog.group_addresses.map((g) => [g.id, g] as const));
+    expect(byId.get("ga1")?.dpt).toBe("1.001");
+    expect(byId.get("ga2")?.dpt).toBe("5.001"); // came from com object
+
+    // Links present for both ga1 (two bindings) and ga2
+    const ga1Links = catalog.links?.filter((l) => l.gaId === "ga1") ?? [];
+    expect(ga1Links.length).toBeGreaterThanOrEqual(1);
+    const ga2Links = catalog.links?.filter((l) => l.gaId === "ga2") ?? [];
+    expect(ga2Links.length).toBeGreaterThanOrEqual(1);
+
+    // Indexes populated
+    expect(catalog.indexes.groupAddressesById["ga1"].address).toBe("1/1/1");
+    expect(catalog.indexes.comObjectsById["co2"].datapointType).toBe("5.001");
+
+    // Stats and secure flags
+    expect(catalog.stats.totals.groupAddresses).toBe(3);
+    expect(catalog.stats.secure.hasSecure).toBe(true);
+    expect(catalog.stats.secure.secureGroupAddressCount).toBe(1);
+    expect(Object.keys(catalog.stats.dptUsage)).toEqual(
+      expect.arrayContaining(["1.001", "5.001"])
+    );
   });
 });

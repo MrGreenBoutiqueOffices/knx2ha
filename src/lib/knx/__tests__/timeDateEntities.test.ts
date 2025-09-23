@@ -2,11 +2,10 @@ import { describe, expect, it } from "@jest/globals";
 import YAML from "yaml";
 
 import { buildHaEntities, haEntitiesToYaml } from "@/lib/knx/export";
-import type { KnxCatalog } from "@/lib/types";
 
 describe("time/date entities", () => {
   it("maps DPT 10/11/19 to dedicated time domains", () => {
-    const catalog: KnxCatalog = {
+  const catalog = {
       project_name: "Fixture",
       group_addresses: [
         {

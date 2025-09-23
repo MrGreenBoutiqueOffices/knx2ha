@@ -54,8 +54,14 @@ export default function KnxUpload() {
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
   const [dzKey, setDzKey] = useState(0);
 
-  const projectName = catalog?.project_name ?? "Unknown";
-  const groupAddressCount = catalog?.group_addresses.length ?? 0;
+  const projectName = catalog?.meta?.name ?? "Unknown";
+  const groupAddressCount = useMemo(() => {
+    if (!catalog) return 0;
+    if (catalog.groupAddresses?.flat) return catalog.groupAddresses.flat.length;
+    const maybeLegacy = catalog as unknown as { group_addresses?: Array<{ id: string }> };
+    if (Array.isArray(maybeLegacy.group_addresses)) return maybeLegacy.group_addresses.length;
+    return 0;
+  }, [catalog]);
 
   const [entityOverrides, setEntityOverrides] = useState<EntityOverrides>({});
 
@@ -192,10 +198,25 @@ export default function KnxUpload() {
     [adjustedEntities]
   );
 
-  const catalogYaml = useMemo(
-    () => (catalog ? toCatalogYaml(catalog) : ""),
-    [catalog]
-  );
+  const addressIndex = useMemo(() => {
+    const idx: Record<string, { name?: string; dpt?: string; id?: string }> = {};
+    if (!catalog) return idx;
+    if (catalog.groupAddresses?.flat) {
+      for (const ga of catalog.groupAddresses.flat) {
+        idx[ga.address] = { name: ga.name, dpt: ga.datapointType, id: ga.id };
+      }
+    } else {
+      const maybeLegacy = catalog as unknown as { group_addresses?: Array<{ id: string; name?: string; address: string; dpt?: string }> };
+      if (Array.isArray(maybeLegacy.group_addresses)) {
+        for (const ga of maybeLegacy.group_addresses) {
+          idx[ga.address] = { name: ga.name, dpt: ga.dpt, id: ga.id };
+        }
+      }
+    }
+    return idx;
+  }, [catalog]);
+
+  const catalogYaml = useMemo(() => (catalog ? toCatalogYaml(catalog) : ""), [catalog]);
 
   const haYaml = useMemo(
     () => (adjustedEntities ? haEntitiesToYaml(adjustedEntities) : ""),
@@ -338,6 +359,7 @@ export default function KnxUpload() {
               <EntityConfigurator
                 entities={keyedEntities}
                 overrides={entityOverrides}
+                addressIndex={addressIndex}
                 onChange={handleOverrideChange}
                 onReset={handleOverrideReset}
               />
