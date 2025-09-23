@@ -40,13 +40,21 @@ export interface HaEntities {
   scenes: HaScene[];
 }
 
+type LegacyGA = { id: string; name?: string; address: string; dpt?: string; description?: string };
+export type LegacyCatalog = { project_name?: string; group_addresses?: LegacyGA[] };
+
+type BuildCatalogInput = KnxCatalog | LegacyCatalog;
+
 export function buildHaEntities(
-  catalog: KnxCatalog,
+  catalog: BuildCatalogInput,
   opts: ExportOptions = {}
 ): HaEntities {
   // If rich catalog (devices/channels/com objects present), prefer structured mapping
-  const isRich = Boolean(catalog.devices && catalog.devices.length && catalog.groupAddresses?.flat?.length);
-  if (isRich) {
+  const isRich = (c: BuildCatalogInput): c is KnxCatalog =>
+    (c as KnxCatalog).devices !== undefined &&
+    Array.isArray((c as KnxCatalog).devices) &&
+    Boolean((c as KnxCatalog).groupAddresses?.flat?.length);
+  if (isRich(catalog)) {
     const mapped = buildEntitiesFromCatalog(catalog);
     const ent: HaEntities = {
       switches: [],
@@ -98,23 +106,23 @@ export function buildHaEntities(
   const scenes: HaScene[] = [];
 
   // Optional: use link contexts to improve pairing
-  const linksByGa = catalog.links && catalog.links.length
-    ? new Map<string, KnxLinkInfo>(catalog.links.map((l) => [l.gaId, l]))
+  const linksByGa = (catalog as KnxCatalog).links && (catalog as KnxCatalog).links!.length
+    ? new Map<string, KnxLinkInfo>((catalog as KnxCatalog).links!.map((l) => [l.gaId, l]))
     : undefined;
 
   // Link-driven aggregates
   const linkedLaAggs = buildLinkedLightAggregates(
-    catalog.group_addresses,
+    (catalog as LegacyCatalog).group_addresses ?? [],
     linksByGa
   );
   const addrAggs = linkedLaAggs.length
     ? []
-    : buildAddressLightAggregates(catalog.group_addresses);
+    : buildAddressLightAggregates((catalog as LegacyCatalog).group_addresses ?? []);
   const laAggs = linkedLaAggs.length
     ? linkedLaAggs
     : addrAggs.length
     ? addrAggs
-    : buildLaLightAggregates(catalog.group_addresses);
+    : buildLaLightAggregates((catalog as LegacyCatalog).group_addresses ?? []);
   for (const a of laAggs) {
     if (!a.on_off) continue;
     const entry: HaLight = { name: a.name, address: a.on_off };
@@ -125,7 +133,7 @@ export function buildHaEntities(
       lights.push(entry);
   }
 
-  const switchAggs = buildSwitchAggregates(catalog.group_addresses, linksByGa);
+  const switchAggs = buildSwitchAggregates((catalog as LegacyCatalog).group_addresses ?? [], linksByGa);
   for (const s of switchAggs) {
     const entry: HaSwitch = { name: s.name, address: s.address! };
     if (s.state_address) entry.state_address = s.state_address;
@@ -134,7 +142,7 @@ export function buildHaEntities(
       switches.push(entry);
   }
 
-  const coverAggs = buildCoverAggregates(catalog.group_addresses, linksByGa);
+  const coverAggs = buildCoverAggregates((catalog as LegacyCatalog).group_addresses ?? [], linksByGa);
   for (const c of coverAggs) {
     const entry: HaCover = { name: c.name };
     if (c.move_long_address) entry.move_long_address = c.move_long_address;
@@ -153,7 +161,7 @@ export function buildHaEntities(
   }
 
   const consumed = collectConsumedIds(laAggs, switchAggs, coverAggs);
-  for (const ga of catalog.group_addresses) {
+  for (const ga of (catalog as LegacyCatalog).group_addresses ?? []) {
     if (consumed.has(ga.id)) continue;
 
     const mapped = mapSingleGaToEntity(ga);
@@ -277,7 +285,7 @@ function entitiesToYaml(doc: Document.Parsed, ent: HaEntities): YAMLMap {
 }
 
 export function toHomeAssistantYaml(
-  catalog: KnxCatalog,
+  catalog: BuildCatalogInput,
   opts: ExportOptions = {}
 ): string {
   const ent = buildHaEntities(catalog, opts);
@@ -291,8 +299,7 @@ export function haEntitiesToYaml(ent: HaEntities): string {
   return String(doc);
 }
 
-type LegacyGA = { id: string; name?: string; address: string; dpt?: string; description?: string };
-type LegacyCatalog = { project_name?: string; group_addresses?: LegacyGA[] };
+// Keep these types exported to help tests/consumers using legacy shape
 
 export function toCatalogYaml(catalog: KnxCatalog | LegacyCatalog): string {
   // Backward-compatible path: if rich structures are missing, emit legacy minimal YAML

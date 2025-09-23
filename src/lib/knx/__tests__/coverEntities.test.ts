@@ -2,11 +2,10 @@ import { describe, expect, it } from "@jest/globals";
 import YAML from "yaml";
 
 import { buildHaEntities, haEntitiesToYaml } from "@/lib/knx/export";
-import type { KnxCatalog } from "@/lib/types";
 
 describe("cover entities", () => {
   it("collects cover commands, feedback and invert hints into a single cover", () => {
-    const catalog: KnxCatalog = {
+  const catalog = {
       project_name: "CoverFixture",
       group_addresses: [
       {

@@ -18,6 +18,7 @@ import {
 interface EntityConfiguratorProps {
   entities: KeyedEntities;
   overrides: EntityOverrides;
+  addressIndex?: Record<string, { name?: string; dpt?: string; id?: string }>;
   onChange: EntityChangeHandler;
   onReset: EntityResetHandler;
 }
@@ -38,6 +39,7 @@ const SECTION_LABEL: Record<keyof KeyedEntities, string> = {
 export default function EntityConfigurator({
   entities,
   overrides,
+  addressIndex,
   onChange,
   onReset,
 }: EntityConfiguratorProps) {
@@ -72,6 +74,7 @@ export default function EntityConfigurator({
         <EntitySectionTable
           key={section.domain}
           section={section}
+          addressIndex={addressIndex}
           onChange={onChange}
           onReset={onReset}
           collapsed={collapsed[section.domain] ?? true}

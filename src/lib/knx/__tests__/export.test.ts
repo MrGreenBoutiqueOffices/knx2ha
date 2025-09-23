@@ -8,10 +8,9 @@ import {
   toCatalogYaml,
   toHomeAssistantYaml,
 } from "@/lib/knx/export";
-import type { KnxCatalog } from "@/lib/types";
 
 describe("export helpers", () => {
-  const catalog: KnxCatalog = {
+  const catalog = {
     project_name: "Export Fixture",
     group_addresses: [
       {

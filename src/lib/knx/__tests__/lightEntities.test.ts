@@ -2,11 +2,10 @@ import { describe, expect, it } from "@jest/globals";
 import YAML from "yaml";
 
 import { buildHaEntities, haEntitiesToYaml } from "@/lib/knx/export";
-import type { KnxCatalog } from "@/lib/types";
 
 describe("light entities", () => {
   it("merges LA light groups into full-featured Home Assistant lights", () => {
-    const catalog: KnxCatalog = {
+  const catalog = {
       project_name: "LightFixture",
       group_addresses: [
       {

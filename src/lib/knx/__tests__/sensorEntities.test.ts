@@ -2,11 +2,10 @@ import { describe, expect, it } from "@jest/globals";
 import YAML from "yaml";
 
 import { buildHaEntities, haEntitiesToYaml } from "@/lib/knx/export";
-import type { KnxCatalog } from "@/lib/types";
 
 describe("sensor entities", () => {
   it("maps numeric GA's to HA sensors with correct type metadata", () => {
-    const catalog: KnxCatalog = {
+  const catalog = {
       project_name: "SensorFixture",
       group_addresses: [
       {

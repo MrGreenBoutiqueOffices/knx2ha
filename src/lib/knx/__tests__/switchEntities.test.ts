@@ -2,11 +2,10 @@ import { describe, expect, it } from "@jest/globals";
 import YAML from "yaml";
 
 import { buildHaEntities, haEntitiesToYaml } from "@/lib/knx/export";
-import type { KnxCatalog } from "@/lib/types";
 
 describe("switch entities", () => {
   it("aggregates switching groups into Home Assistant switches", () => {
-    const catalog: KnxCatalog = {
+  const catalog = {
       project_name: "SwitchFixture",
       group_addresses: [
       {

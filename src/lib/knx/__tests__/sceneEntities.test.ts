@@ -2,11 +2,10 @@ import { describe, expect, it } from "@jest/globals";
 import YAML from "yaml";
 
 import { buildHaEntities, haEntitiesToYaml } from "@/lib/knx/export";
-import type { KnxCatalog } from "@/lib/types";
 
 describe("scene entities", () => {
   it("maps GA's to HA scenes using DPT and name hints", () => {
-    const catalog: KnxCatalog = {
+  const catalog = {
       project_name: "SceneFixture",
       group_addresses: [
         { id: "ga-1", name: "Scene 01", address: "1/7/1", dpt: "18.001" },

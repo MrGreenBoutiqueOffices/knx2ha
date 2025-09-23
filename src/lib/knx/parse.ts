@@ -22,6 +22,7 @@ import type {
   KnxStackFrame,
   KnxTopology,
   KnxLine,
+  KnxCatalogStats,
 } from "../types";
 import { ParseProgress } from "../types/parse";
 import { decodeGaIntToTriple } from "./utils";
@@ -193,7 +194,7 @@ const SCAN_RANGE: [number, number] = [0, 20];
 const FILE_RANGE: [number, number] = [20, 80];
 const BUILD_RANGE: [number, number] = [80, 95];
 const FINAL_RANGE: [number, number] = [95, 100];
-const BUILD_PROGRESS_TARGET_UPDATES = 80;
+// NOTE: Previously used for progress granularity; remove if unused to satisfy linters
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
@@ -408,7 +409,7 @@ function visitXml(
       collectDevices(state, filename, key, attrs, stack);
       collectComObjects(state, filename, key, attrs, stack);
       collectBindings(state, filename, key, attrs, stack);
-      collectSecurity(state, filename, key, attrs, stack);
+  collectSecurity(state, filename, key, attrs);
 
       if (isPlainObject(entry) || Array.isArray(entry)) visitXml(state, filename, entry, stack);
 
@@ -603,25 +604,45 @@ function collectGroupStructures(
     if (!id) return;
     const ga = ensureMapEntry(state.groupAddresses, id, () => ({
       id,
+      address: undefined,
+      mainGroup: undefined,
+      middleGroup: undefined,
+      subGroup: undefined,
+      addressString: undefined,
+      name: undefined,
+      description: undefined,
+      datapointType: undefined,
+      rawDatapointType: undefined,
+      flags: undefined,
+      security: undefined,
+      priority: undefined,
+      bitLength: undefined,
+      parentRangeId: undefined,
+      context: undefined,
+      meta: undefined,
       attrs: {},
     }));
     const addr = normalizeAddressFromAttrs(attrs);
-    ga.address = ga.address || addr;
-    ga.addressString = ga.addressString || attrs["Address"];
-    ga.mainGroup = ga.mainGroup ?? normalizeNumber(attrs["MainGroup"] || attrs["Main"]);
-    ga.middleGroup = ga.middleGroup ?? normalizeNumber(attrs["MiddleGroup"] || attrs["Middle"]);
-    ga.subGroup = ga.subGroup ?? normalizeNumber(attrs["SubGroup"] || attrs["Sub"]);
-    ga.name = ga.name || attrs["Name"] || attrs["Text"];
-    ga.description = ga.description || attrs["Description"];
-    if (!ga.datapointType) {
+    if (addr) ga.address = addr;
+    if (attrs["Address"]) ga.addressString = attrs["Address"];
+    const main = normalizeNumber(attrs["MainGroup"] || attrs["Main"]);
+    const middle = normalizeNumber(attrs["MiddleGroup"] || attrs["Middle"]);
+    const sub = normalizeNumber(attrs["SubGroup"] || attrs["Sub"]);
+    if (main !== undefined) ga.mainGroup = main;
+    if (middle !== undefined) ga.middleGroup = middle;
+    if (sub !== undefined) ga.subGroup = sub;
+    const nm = attrs["Name"] || attrs["Text"];
+    if (nm !== undefined) ga.name = nm;
+    if (attrs["Description"] !== undefined) ga.description = attrs["Description"];
+    {
       const { canonical, raw } = normalizeDatapoint(attrs["DatapointType"] || attrs["Datapoint"] || attrs["DPTs"]);
-      ga.datapointType = canonical;
-      ga.rawDatapointType = raw;
+      if (canonical) ga.datapointType = canonical;
+      if (raw) ga.rawDatapointType = raw;
     }
-    ga.flags = mergeFlags(ga.flags, boolRecordFromFlags(attrs));
-    if (!ga.priority && attrs["Priority"]) ga.priority = attrs["Priority"];
+    ga.flags = mergeFlags(boolRecordFromFlags(attrs), ga.flags);
+    if (attrs["Priority"]) ga.priority = attrs["Priority"];
     const bitLength = normalizeNumber(attrs["BitLength"] || attrs["Length"] || attrs["Size"]);
-    ga.bitLength = ga.bitLength ?? bitLength;
+    if (bitLength !== undefined) ga.bitLength = bitLength;
     if (!ga.meta) {
       ga.meta = {
         source: filename,
@@ -981,8 +1002,7 @@ function collectSecurity(
   state: ParseState,
   filename: string,
   tag: string,
-  attrs: Record<string, string>,
-  stack: StackItem[]
+  attrs: Record<string, string>
 ) {
   if (attrs["Security"] && attrs["Security"].toLowerCase() !== "none") {
     state.secureHints.add(`${tag}:${attrs["Id"] || attrs["ID"] || filename}`);
@@ -1002,6 +1022,7 @@ function buildGroupAddressTree(
   const levels = new Map<KnxId, KnxGroupLevel>();
   const flat: KnxGroupAddress[] = [];
   const compat: GroupAddressCompat[] = [];
+  const added = new Set<string>();
 
   const toGroupAddress = (ga: PartialGroupAddress): KnxGroupAddress | undefined => {
     if (!ga.address) return undefined;
@@ -1020,6 +1041,7 @@ function buildGroupAddressTree(
       meta: ga.meta,
     };
     flat.push(entry);
+    added.add(entry.id);
     compat.push({
       id: entry.id,
       name: entry.name || entry.address,
@@ -1060,6 +1082,12 @@ function buildGroupAddressTree(
       if (full) items.push(full);
     }
     if (items.length) level.items = items.sort((a, b) => compareAddressStrings(a.address, b.address));
+  }
+
+  // Add any group addresses that are not part of a GroupRange
+  for (const [gaId, partial] of state.groupAddresses.entries()) {
+    if (added.has(gaId)) continue;
+    toGroupAddress(partial);
   }
 
   const roots = Array.from(levels.values()).filter((level) => !level.parentId || !levels.has(level.parentId));
@@ -1546,7 +1574,7 @@ export async function parseKnxproj(
     emit("build_catalog", rangePercent(BUILD_RANGE, processedSteps / Math.max(1, buildSteps)));
   };
 
-  const { tree, flat, compat } = buildGroupAddressTree(state);
+  const { tree, flat } = buildGroupAddressTree(state);
   processedSteps += state.groupAddresses.size;
   emitBuildProgress();
 

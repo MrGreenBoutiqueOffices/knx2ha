@@ -26,11 +26,11 @@ export function buildLaLightAggregates(gas: GroupAddress[]): LightAggregate[] {
   const byBase = new Map<string, LightAggregate>();
 
   for (const ga of gas) {
-    if (!isLA(ga.name)) continue;
+    if (!isLA(ga.name ?? "")) continue;
     const parts = parseAddress(ga.address);
     if (!parts) continue;
 
-    const base = ga.name.trim();
+    const base = (ga.name ?? ga.address).trim();
     let agg = byBase.get(base);
     if (!agg) {
       agg = { name: base, consumedIds: new Set<string>() };
@@ -79,14 +79,14 @@ export function buildAddressLightAggregates(gas: GroupAddress[]): LightAggregate
     const dpt = normalizeDptToHyphen(ga.dpt);
     let g = groups.get(parts.sub);
     if (!g) {
-      g = { name: ga.name, consumedIds: new Set<string>() } as LightAggregate & {
+      g = { name: ga.name ?? ga.address, consumedIds: new Set<string>() } as LightAggregate & {
         nameChosen?: boolean;
       };
       groups.set(parts.sub, g);
     }
 
     // Prefer naming from 1/1 (switch cmd) or 1/3 (brightness cmd)
-    if (!g.nameChosen && (parts.middle === 1 || parts.middle === 3)) {
+    if (!g.nameChosen && (parts.middle === 1 || parts.middle === 3) && ga.name) {
       g.name = ga.name;
       g.nameChosen = true;
     }
@@ -136,7 +136,7 @@ export function buildLinkedLightAggregates(
     const l = linksByGa!.get(gaId);
     return l?.comObject || l?.context;
   };
-  const isStatus = (g: GroupAddress): boolean => /\bstatus\b|\bstate\b/i.test(g.name);
+  const isStatus = (g: GroupAddress): boolean => /\bstatus\b|\bstate\b/i.test(g.name ?? "");
   const isReadFlag = (gaId: string): boolean => {
     const f = linksByGa!.get(gaId)?.flags || {};
     const v = f["ReadFlag"];
@@ -214,14 +214,16 @@ export function buildLinkedLightAggregates(
 }
 
 /** ====================== SWITCH AGGREGATE ====================== */
-function isStatusName(name: string): boolean {
+function isStatusName(name?: string): boolean {
+  if (!name) return false;
   return STATUS_RE.test(name);
 }
-function normalizeBaseName(name: string): string {
-  let n = name.toLowerCase().trim();
+function normalizeBaseName(name?: string): string {
+  const raw = (name ?? "");
+  let n = raw.toLowerCase().trim();
   n = n.replace(NAME_STRIP_RE, "");
   n = n.replace(/\s+/g, " ").trim();
-  return n.length ? n : name.toLowerCase().trim();
+  return n.length ? n : raw.toLowerCase().trim();
 }
 
 export interface SwitchAggregate {
@@ -239,22 +241,22 @@ export function buildSwitchAggregates(
 
   for (const ga of gas) {
     // Do not treat central 0/1/* group addresses as switches; these are scenes
-    if (ga.address?.startsWith("0/1/")) continue;
+  if (ga.address?.startsWith("0/1/")) continue;
 
     const dpt = normalizeDptToHyphen(ga.dpt);
     if (dpt !== "1-1") continue;
 
   // Skip names that clearly indicate a scene so they'll map as scene later
-  if (isSceneLikeName(ga.name)) continue;
+  if (isSceneLikeName(ga.name ?? "")) continue;
 
     // Skip lighting central 'waarde sturen' middle 7 to avoid conflicting with scenes test data
     const parts = parseAddress(ga.address);
     if (parts && parts.main === 1 && parts.middle === 7) continue;
 
-    const base = normalizeBaseName(ga.name);
+    const base = normalizeBaseName(ga.name ?? ga.address);
     let agg = byBase.get(base);
     if (!agg) {
-      agg = { name: ga.name, consumedIds: new Set<string>() };
+      agg = { name: ga.name ?? ga.address, consumedIds: new Set<string>() };
       byBase.set(base, agg);
     }
 
@@ -264,7 +266,7 @@ export function buildSwitchAggregates(
     } else {
       if (!agg.address) {
         agg.address = ga.address;
-        agg.name = ga.name;
+        agg.name = ga.name ?? agg.name;
       }
       agg.consumedIds.add(ga.id);
     }
@@ -309,8 +311,8 @@ export function buildSwitchAggregates(
     }
 
     // Prefer ones marked with ReadFlag or name indicating status
-    let chosen: GroupAddress | undefined = candidates.find((g) => isReadFlag(g.id));
-    if (!chosen) chosen = candidates.find((g) => isStatusName(g.name));
+  let chosen: GroupAddress | undefined = candidates.find((g) => isReadFlag(g.id));
+  if (!chosen) chosen = candidates.find((g) => isStatusName(g.name));
     if (!chosen) chosen = candidates[0];
 
     if (chosen) {
@@ -452,8 +454,8 @@ const RE_SHORT = /\b(short|step|stap|kort)\b/i; // GA names signalling short/ste
 const RE_LONG = /\b(long|lang|up\/?down|omhoog|omlaag|open|close|sluit)\b/i; // GA names signalling long/continuous movement
 const RE_INVERT = /\b(invert|omgekeerd|inverse)\b/i; // GA names signalling direction inversion
 
-function coverBaseName(name: string): string {
-  let n = name.toLowerCase();
+function coverBaseName(name?: string): string {
+  let n = (name ?? "").toLowerCase();
   n = n
     .replace(RE_STATUS2, "")
     .replace(RE_POS, "")
@@ -462,7 +464,7 @@ function coverBaseName(name: string): string {
     .replace(RE_SHORT, "")
     .replace(RE_LONG, "");
   n = n.replace(/\s+/g, " ").trim();
-  return n || name.toLowerCase();
+  return n || (name ?? "").toLowerCase();
 }
 
 export interface CoverAggregate {
@@ -505,8 +507,8 @@ export function buildCoverAggregates(
   >();
 
   for (const ga of gas) {
-    const name = ga.name;
-    const key = coverBaseName(name);
+    const name = ga.name ?? "";
+    const key = coverBaseName(name || ga.address);
     const d = normalizeDptToHyphen(ga.dpt);
     const isCoverLike = RE_COVER_WORDS.test(name);
     const isStop = RE_STOP.test(name);
@@ -533,7 +535,7 @@ export function buildCoverAggregates(
     let group = groups.get(key);
     if (!group) {
       group = {
-        name,
+        name: name || ga.address,
         entries: [],
         hasCommand: false,
       };
@@ -541,7 +543,7 @@ export function buildCoverAggregates(
     }
 
     if (isCommand && !group.hasCommand) {
-      group.name = name;
+      group.name = name || group.name;
     }
 
     group.entries.push(entry);
@@ -667,7 +669,7 @@ export function buildCoverAggregates(
 
       if (agg.position_address && !agg.position_state_address) {
         const cand = peers
-          .filter((g) => normalizeDptToHyphen(g.dpt)?.startsWith("5-") && (RE_STATUS2.test(g.name) || isReadFlag(g.id)))
+          .filter((g) => normalizeDptToHyphen(g.dpt)?.startsWith("5-") && (RE_STATUS2.test(g.name ?? "") || isReadFlag(g.id)))
           .find((g) => normalizeDptToHyphen(g.dpt) === "5-1");
         if (cand) {
           agg.position_state_address = cand.address;
@@ -677,7 +679,7 @@ export function buildCoverAggregates(
 
       if (agg.angle_address && !agg.angle_state_address) {
         const cand = peers
-          .filter((g) => normalizeDptToHyphen(g.dpt)?.startsWith("5-") && (RE_STATUS2.test(g.name) || isReadFlag(g.id)))
+          .filter((g) => normalizeDptToHyphen(g.dpt)?.startsWith("5-") && (RE_STATUS2.test(g.name ?? "") || isReadFlag(g.id)))
           .find((g) => normalizeDptToHyphen(g.dpt) === "5-3");
         if (cand) {
           agg.angle_state_address = cand.address;
@@ -710,13 +712,13 @@ function assignCoverValue(
 export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   // Treat central 0/1/* addresses as scenes, regardless of DPT
   if (ga.address?.startsWith("0/1/")) {
-    const m = ga.name.match(/\b(\d{1,2})\b/);
+    const m = (ga.name ?? "").match(/\b(\d{1,2})\b/);
     const scene_number = m ? parseInt(m[1], 10) : undefined;
     const payload = { name: ga.name, address: ga.address, scene_number };
     return { domain: "scene", payload } as MappedEntity;
   }
 
-  const t = guessEntityType(ga.dpt, ga.name, ga.address);
+  const t = guessEntityType(ga.dpt, ga.name ?? "", ga.address);
   const dptHyphen = normalizeDptToHyphen(ga.dpt);
 
   if (t === "switch") {
@@ -748,14 +750,14 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   }
 
   if (t === "scene") {
-    const m = ga.name.match(/\b(\d{1,2})\b/);
+    const m = (ga.name ?? "").match(/\b(\d{1,2})\b/);
     const scene_number = m ? parseInt(m[1], 10) : undefined;
     const payload = { name: ga.name, address: ga.address, scene_number };
     return { domain: "scene", payload } as MappedEntity;
   }
 
   if (t === "sensor") {
-    const sensorType = dptToSensorType(ga.dpt, ga.name);
+    const sensorType = dptToSensorType(ga.dpt, ga.name ?? "");
     if (sensorType) {
       const payload: HaSensor = {
         name: ga.name,
@@ -765,7 +767,7 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
       return { domain: "sensor", payload };
     }
     const unknownPayload: UnknownEntity = {
-      name: ga.name,
+      name: ga.name ?? ga.address,
       address: ga.address,
       dpt: ga.dpt,
     };
@@ -802,11 +804,12 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   if (t === "cover") {
     const payload: HaCover = { name: ga.name };
     const dptHyphen = normalizeDptToHyphen(ga.dpt);
-    const hasStatus = RE_STATUS2.test(ga.name);
-    const hasAngleHint = RE_ANGLE.test(ga.name);
-    const hasPositionHint = RE_POS.test(ga.name);
-    const hasInvert = RE_INVERT.test(ga.name);
-    const isStopName = RE_STOP.test(ga.name);
+    const nm = ga.name ?? "";
+    const hasStatus = RE_STATUS2.test(nm);
+    const hasAngleHint = RE_ANGLE.test(nm);
+    const hasPositionHint = RE_POS.test(nm);
+    const hasInvert = RE_INVERT.test(nm);
+    const isStopName = RE_STOP.test(nm);
 
     let invertTargetsAngle = false;
 
@@ -850,7 +853,7 @@ export function mapSingleGaToEntity(ga: GroupAddress): MappedEntity {
   }
 
   const payload: UnknownEntity = {
-    name: ga.name,
+    name: ga.name ?? ga.address,
     address: ga.address,
     dpt: ga.dpt,
   };
