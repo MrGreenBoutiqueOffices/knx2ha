@@ -45,7 +45,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Build with Next.js
-        run: npm next build
+        run: npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4.0.0
         with:
