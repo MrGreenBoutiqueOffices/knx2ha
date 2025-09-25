@@ -7,7 +7,7 @@ on:
   push:
     branches:
       - main
-      - klaas-2025-020
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,8 +15,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -32,12 +32,20 @@ jobs:
           cache: npm
       - name: Configure Pages
         uses: actions/configure-pages@v5.0.0
+        with:
+          static_site_generator: next
+      - name: Restore cache
+        uses: actions/cache@v4.3.0
+        with:
+          path: |
+            .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-
       - name: Install dependencies
         run: npm ci
-      - name: Build (static export)
-        run: npm run build
-        env:
-          PAGES_BASE_PATH: ${{ steps.setup_pages.outputs.base_path }}
+      - name: Build with Next.js
+        run: npm next build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4.0.0
         with:
