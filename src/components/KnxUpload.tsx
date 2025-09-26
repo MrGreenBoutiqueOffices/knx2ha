@@ -360,11 +360,11 @@ export default function KnxUpload() {
               </h1>
             </div>
             <div className="ms-auto flex items-center gap-2">
-              <ThemeToggle />
               {catalog && <Badge variant="secondary">{projectName}</Badge>}
               {catalog && (
                 <Badge variant="outline">{groupAddressCount} GA&apos;s</Badge>
               )}
+              <ThemeToggle variant="ghost" size="icon" />
             </div>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -459,7 +459,7 @@ export default function KnxUpload() {
                       downloadText("knx_catalog.yaml", catalogYaml)
                     }
                   >
-                    <FileDown className="mr-2 h-4 w-4" />
+                    <FileDown className="h-4 w-4" />
                     Catalog YAML
                   </Button>
                   <Button
@@ -469,7 +469,7 @@ export default function KnxUpload() {
                       downloadText("knx_homeassistant.yaml", haYaml)
                     }
                   >
-                    <FileDown className="mr-2 h-4 w-4" />
+                    <FileDown className="h-4 w-4" />
                     Home Assistant YAML
                   </Button>
                 </div>
