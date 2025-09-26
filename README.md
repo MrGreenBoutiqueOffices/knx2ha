@@ -16,6 +16,8 @@ This project is a **Next.js application** that converts KNX configuration files 
   Allows manual adjustments and overrides for entity types and names.
 - 🌍 **Next.js Frontend**<br>
   Web interface for uploading, previewing, and exporting configurations.
+ - 🔁 **Export/Import Configuration**<br>
+   Save your parsed catalog plus all manual overrides to a JSON file and load it later or share with colleagues.
 
 ## Getting Started
 
@@ -48,6 +50,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm run build
 npm start
 ```
+
+## Export/Import configuration
+
+After you upload and parse a KNX project, you can:
+
+- Export config: downloads a JSON snapshot containing the parsed catalog, your current options (like dropping Reserve), and all entity overrides. Use this to continue later or share your work.
+- Import config: load a previously saved JSON to restore the catalog, options, and overrides. The Home Assistant YAML view will update immediately.
+
+You’ll find the buttons near the YAML export buttons in the UI.
 
 ## Resources
 
