@@ -2,7 +2,9 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { VariantProps } from "class-variance-authority";
 import {
   Tooltip,
   TooltipContent,
@@ -11,7 +13,17 @@ import {
 } from "@/components/ui/tooltip";
 import { Moon, Sun, Laptop } from "lucide-react";
 
-export default function ThemeToggle() {
+type ButtonVariant = VariantProps<typeof buttonVariants>["variant"];
+type ButtonSize = VariantProps<typeof buttonVariants>["size"];
+
+type ToggleProps = {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  className?: string;
+  ariaLabel?: string;
+};
+
+export default function ThemeToggle({ variant = "outline", size = "icon", className, ariaLabel }: ToggleProps) {
   const { theme, setTheme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -39,10 +51,10 @@ export default function ThemeToggle() {
         <TooltipTrigger asChild>
           <Button
             type="button"
-            variant="outline"
-            size="icon"
-            className="cursor-pointer"
-            aria-label={`Toggle theme (current: ${theme ?? "system"})`}
+            variant={variant}
+            size={size}
+            className={cn("cursor-pointer", className)}
+            aria-label={ariaLabel ?? `Toggle theme (current: ${theme ?? "system"})`}
             onClick={() => setTheme(nextTheme())}
           >
             {icon}
