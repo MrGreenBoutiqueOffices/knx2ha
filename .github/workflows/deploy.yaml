@@ -7,6 +7,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to deploy (e.g. v0.2.0)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -25,7 +30,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5.0.0
         with:
-          ref: ${{ github.event.release.tag_name }}
+          # Use release tag for release events, otherwise the provided input tag
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+      - name: Resolve checked out commit
+        id: rev
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
       - name: Setup Node
         uses: actions/setup-node@v5.0.0
         with:
@@ -47,8 +57,8 @@ jobs:
         run: npm ci
       - name: Build with Next.js
         env:
-          NEXT_PUBLIC_APP_VERSION: "${{ github.event.release.tag_name }}"
-          NEXT_PUBLIC_COMMIT_SHA: "${{ github.sha }}"
+          NEXT_PUBLIC_APP_VERSION: "${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}"
+          NEXT_PUBLIC_COMMIT_SHA: "${{ steps.rev.outputs.sha }}"
         run: npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4.0.0
