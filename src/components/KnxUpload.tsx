@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { PackageOpen, FileDown } from "lucide-react";
 
 import { downloadText } from "@/lib/utils/download";
+import { buildSavedConfig, parseSavedConfig, stringifySavedConfig } from "@/lib/utils/config";
 import UploadDropzone from "./knx/UploadDropzone";
 import OptionsBar from "./knx/OptionsBar";
 import ProgressInfo from "./knx/ProgressInfo";
@@ -277,6 +278,51 @@ export default function KnxUpload() {
     });
   }, []);
 
+  // Export/import of full working configuration
+  const handleExportConfig = useCallback(() => {
+    if (!catalog) {
+      toast.error("Nothing to export", { description: "Upload and parse a project first." });
+      return;
+    }
+    const cfg = buildSavedConfig({
+      catalog,
+      overrides: entityOverrides,
+      dropReserveFromUnknown,
+    });
+    const filenameSafe = (projectName || "project").replace(/[^a-z0-9_-]+/gi, "_");
+    downloadText(`${filenameSafe}_knx2ha_config.json`, stringifySavedConfig(cfg));
+  }, [catalog, entityOverrides, dropReserveFromUnknown, projectName]);
+
+  const handleImportConfig = useCallback(async () => {
+    try {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json,application/json";
+      const pick = await new Promise<File | null>((resolve) => {
+        input.onchange = () => resolve(input.files && input.files[0] ? input.files[0] : null);
+        input.click();
+      });
+      if (!pick) return;
+      const text = await pick.text();
+      const cfg = parseSavedConfig(text);
+      setCatalog(cfg.catalog);
+      setEntityOverrides(cfg.overrides || {});
+      setDropReserveFromUnknown(Boolean(cfg.options?.dropReserveFromUnknown));
+      const overrideCount = Object.keys(cfg.overrides || {}).length;
+      const gaCount =
+        (cfg.catalog.groupAddresses && Array.isArray(cfg.catalog.groupAddresses.flat)
+          ? cfg.catalog.groupAddresses.flat.length
+          : 0) || (Array.isArray(cfg.catalog.group_addresses) ? cfg.catalog.group_addresses.length : 0);
+      const project = cfg.project ?? cfg.catalog.meta?.name ?? "Unknown";
+      toast.success("Configuration loaded", {
+        description: `${project} • ${gaCount} GA's • ${overrideCount} overrides`,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not import configuration";
+      toast.error("Import failed", { description: msg });
+    }
+  }, []);
+
   async function handleParse() {
     if (!file || busy) return;
     try {
@@ -346,6 +392,9 @@ export default function KnxUpload() {
             onToggleReserve={setDropReserveFromUnknown}
             onParse={handleParse}
             onReset={handleReset}
+            onImportConfig={handleImportConfig}
+            onExportConfig={handleExportConfig}
+            canExport={Boolean(catalog)}
           />
 
           <ProgressInfo

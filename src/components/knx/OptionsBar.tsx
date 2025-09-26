@@ -4,7 +4,15 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Upload as UploadIcon, Download as DownloadIcon, MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 export default function OptionsBar({
   file,
@@ -13,6 +21,9 @@ export default function OptionsBar({
   onToggleReserve,
   onParse,
   onReset,
+  onImportConfig,
+  onExportConfig,
+  canExport,
 }: {
   file: File | null;
   busy: boolean;
@@ -20,6 +31,9 @@ export default function OptionsBar({
   onToggleReserve: (v: boolean) => void;
   onParse: () => void;
   onReset: () => void;
+  onImportConfig: () => void;
+  onExportConfig: () => void;
+  canExport: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -60,15 +74,35 @@ export default function OptionsBar({
         >
           {busy ? "Busy…" : "Parse file"}
         </Button>
-        <Button
-          onClick={onReset}
-          className="cursor-pointer"
-          disabled={busy}
-          variant="outline"
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Reset
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="More actions"
+              className="cursor-pointer"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={8}>
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={onImportConfig} disabled={busy}>
+              <UploadIcon className="h-4 w-4" />
+              Import config
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onExportConfig} disabled={!canExport || busy}>
+              <DownloadIcon className="h-4 w-4" />
+              Export config
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onReset} disabled={busy}>
+              <RefreshCw className="h-4 w-4" />
+              Reset
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
