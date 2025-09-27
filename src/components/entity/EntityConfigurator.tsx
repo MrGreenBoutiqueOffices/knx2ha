@@ -63,10 +63,10 @@ export default function EntityConfigurator({
   if (!sections.length) return null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">Entity configuration</h3>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.75rem] text-muted-foreground sm:text-xs">
           Adjust generated entities before downloading the YAML.
         </p>
       </div>

@@ -41,7 +41,7 @@ export default function OptionsBar({
         <Label className="mb-1 block text-xs text-muted-foreground">
           Selected file
         </Label>
-        <div className="truncate text-sm">
+        <div className="truncate text-sm sm:whitespace-nowrap">
           {file ? (
             <Badge variant="secondary" className="max-w-full truncate">
               {file.name}
@@ -52,24 +52,24 @@ export default function OptionsBar({
         </div>
       </div>
 
-      <div className="inline-flex h-9 items-center gap-3">
-        <div className="inline-flex items-center gap-2">
+      <div className="inline-flex h-auto flex-wrap items-center gap-3">
+        <div className="inline-flex flex-wrap items-center gap-2">
           <Switch
             id="opt-reserve"
             checked={dropReserveFromUnknown}
             onCheckedChange={onToggleReserve}
             disabled={busy}
           />
-          <Label htmlFor="opt-reserve" className="cursor-pointer text-sm leading-none">
+          <Label htmlFor="opt-reserve" className="cursor-pointer text-sm leading-snug">
             Filter <code>Reserve</code> entities
           </Label>
         </div>
       </div>
 
-      <div className="flex gap-2 md:justify-end">
+      <div className="flex flex-col gap-2 sm:flex-row md:justify-end">
         <Button
           onClick={onParse}
-          className="cursor-pointer"
+          className="w-full cursor-pointer sm:w-auto"
           disabled={!file || busy}
         >
           {busy ? "Busy…" : "Parse file"}
@@ -79,11 +79,11 @@ export default function OptionsBar({
             <Button
               type="button"
               variant="outline"
-              size="icon"
               aria-label="More actions"
-              className="cursor-pointer"
+              className="cursor-pointer self-stretch sm:self-auto px-2"
             >
               <MoreHorizontal className="h-4 w-4" />
+              <span className="ms-1 inline text-sm sm:hidden">More</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={8}>

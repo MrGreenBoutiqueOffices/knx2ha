@@ -62,10 +62,10 @@ export default function CodePanel({
           </Tooltip>
         </div>
 
-        <ScrollArea className="h-[28rem] rounded-lg border bg-muted/40">
+        <ScrollArea className="h-[18rem] rounded-lg border bg-muted/40 sm:h-[28rem]">
           <pre
             aria-label={ariaLabel}
-            className="whitespace-pre-wrap p-4 text-xs"
+            className="whitespace-pre-wrap p-3 text-[0.7rem] sm:p-4 sm:text-xs"
           >
             {value}
           </pre>

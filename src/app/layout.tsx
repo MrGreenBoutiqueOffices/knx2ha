@@ -31,7 +31,7 @@ export default function RootLayout({
         <ThemeProvider>
           {children}
           <Toaster richColors position="top-right" closeButton />
-          <div className="fixed bottom-3 right-3 z-50 opacity-70 hover:opacity-100 transition-opacity">
+          <div className="fixed bottom-3 right-3 z-50 opacity-70 hover:opacity-100 transition-opacity hidden sm:block">
             <VersionTag />
           </div>
         </ThemeProvider>
