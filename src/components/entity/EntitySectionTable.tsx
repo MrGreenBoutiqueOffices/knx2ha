@@ -177,6 +177,7 @@ function createColumns(
   onChange: EntityChangeHandler,
   onReset: EntityResetHandler
 ): ColumnDef<EntityTableRow>[] {
+  type Meta = { className?: string };
   const columns: ColumnDef<EntityTableRow>[] = [
     {
       id: "name",
@@ -193,9 +194,11 @@ function createColumns(
                 name: event.target.value,
               })
             }
+            className="h-8 text-xs md:h-9 md:text-sm"
           />
         );
       },
+  meta: { className: "md:sticky md:left-0 md:z-10 md:bg-background min-w-[12rem]" } as Meta,
     },
     {
       accessorKey: "primary",
@@ -395,6 +398,7 @@ function createColumns(
           | DomainEntityMap["datetime"];
         return <PrimaryCell value={entity.state_address ?? ""} addressIndex={addressIndex} />;
       },
+      meta: { className: "hidden sm:table-cell" } as Meta,
     });
   }
 
@@ -406,6 +410,7 @@ function createColumns(
         const entity = row.original.base as DomainEntityMap["light"];
         return <PrimaryCell value={entity.address ?? ""} addressIndex={addressIndex} />;
       },
+      meta: { className: "hidden sm:table-cell" } as Meta,
     });
     columns.push({
       id: "light_state",
@@ -414,6 +419,7 @@ function createColumns(
         const entity = row.original.base as DomainEntityMap["light"];
         return <PrimaryCell value={entity.state_address ?? ""} addressIndex={addressIndex} />;
       },
+      meta: { className: "hidden sm:table-cell" } as Meta,
     });
     columns.push({
       id: "light_brightness",
@@ -429,6 +435,7 @@ function createColumns(
         const entity = row.original.base as DomainEntityMap["light"];
         return <PrimaryCell value={entity.brightness_address ?? ""} addressIndex={addressIndex} />;
       },
+      meta: { className: "hidden sm:table-cell" } as Meta,
     });
   }
 
@@ -440,6 +447,7 @@ function createColumns(
         const entity = row.original.base as DomainEntityMap["scene"];
         return <PrimaryCell value={entity.address ?? ""} addressIndex={addressIndex} />;
       },
+      meta: { className: "hidden sm:table-cell" } as Meta,
     });
   }
 
@@ -476,11 +484,22 @@ function createColumns(
       const { override, key } = row.original;
       if (!override) return null;
       return (
-        <Button variant="ghost" size="sm" className="cursor-pointer" onClick={() => onReset(key)}>
-          Reset
-        </Button>
+        <div className="flex items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 cursor-pointer sm:h-8 sm:w-auto sm:px-2"
+            onClick={() => onReset(key)}
+            aria-label="Reset"
+            title="Reset"
+          >
+            <span className="hidden sm:inline">Reset</span>
+            <span className="inline sm:hidden">↺</span>
+          </Button>
+        </div>
       );
     },
+    meta: { className: "" } as Meta,
   });
 
   return columns;
@@ -528,7 +547,7 @@ export function EntitySectionTable({
           type="button"
           onClick={onToggle}
           aria-expanded={!collapsed}
-          className="flex w-full cursor-pointer items-center justify-between bg-muted/40 px-3 py-2 text-left"
+          className="flex w-full cursor-pointer items-center justify-between bg-muted/40 px-2 py-2 text-left sm:px-3"
         >
           <span className="text-sm font-semibold">{section.label}</span>
           <div className="flex items-center gap-2">
@@ -550,7 +569,7 @@ export function EntitySectionTable({
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id}>
+                      <TableHead key={header.id} className={(header.column.columnDef as ColumnDef<EntityTableRow> & { meta?: { className?: string } }).meta?.className}>
                         {header.isPlaceholder
                           ? null
                           : flexRender(
@@ -567,7 +586,7 @@ export function EntitySectionTable({
                   table.getRowModel().rows.map((row) => (
                     <TableRow key={row.id}>
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
+                        <TableCell key={cell.id} className={(cell.column.columnDef as ColumnDef<EntityTableRow> & { meta?: { className?: string } }).meta?.className}>
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext()
@@ -579,9 +598,7 @@ export function EntitySectionTable({
                 ) : (
                   <TableRow>
                     <TableCell colSpan={columns.length} className="text-center">
-                      <span className="text-xs text-muted-foreground">
-                        No entities
-                      </span>
+                      <span className="text-xs text-muted-foreground">No entities</span>
                     </TableCell>
                   </TableRow>
                 )}

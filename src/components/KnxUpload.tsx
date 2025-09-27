@@ -26,7 +26,11 @@ import { toast } from "sonner";
 import { PackageOpen, FileDown } from "lucide-react";
 
 import { downloadText } from "@/lib/utils/download";
-import { buildSavedConfig, parseSavedConfig, stringifySavedConfig } from "@/lib/utils/config";
+import {
+  buildSavedConfig,
+  parseSavedConfig,
+  stringifySavedConfig,
+} from "@/lib/utils/config";
 import UploadDropzone from "./knx/UploadDropzone";
 import OptionsBar from "./knx/OptionsBar";
 import ProgressInfo from "./knx/ProgressInfo";
@@ -34,6 +38,7 @@ import StatsBar from "./knx/StatsBar";
 import CodePanel from "./knx/CodePanel";
 import EntityConfigurator from "./entity/EntityConfigurator";
 import ThemeToggle from "@/components/ThemeToggle";
+import VersionTag from "@/components/VersionTag";
 import {
   DOMAIN_BY_COLLECTION,
   applyEntityOverride,
@@ -281,7 +286,9 @@ export default function KnxUpload() {
   // Export/import of full working configuration
   const handleExportConfig = useCallback(() => {
     if (!catalog) {
-      toast.error("Nothing to export", { description: "Upload and parse a project first." });
+      toast.error("Nothing to export", {
+        description: "Upload and parse a project first.",
+      });
       return;
     }
     const cfg = buildSavedConfig({
@@ -289,8 +296,14 @@ export default function KnxUpload() {
       overrides: entityOverrides,
       dropReserveFromUnknown,
     });
-    const filenameSafe = (projectName || "project").replace(/[^a-z0-9_-]+/gi, "_");
-    downloadText(`${filenameSafe}_knx2ha_config.json`, stringifySavedConfig(cfg));
+    const filenameSafe = (projectName || "project").replace(
+      /[^a-z0-9_-]+/gi,
+      "_"
+    );
+    downloadText(
+      `${filenameSafe}_knx2ha_config.json`,
+      stringifySavedConfig(cfg)
+    );
   }, [catalog, entityOverrides, dropReserveFromUnknown, projectName]);
 
   const handleImportConfig = useCallback(async () => {
@@ -299,7 +312,8 @@ export default function KnxUpload() {
       input.type = "file";
       input.accept = ".json,application/json";
       const pick = await new Promise<File | null>((resolve) => {
-        input.onchange = () => resolve(input.files && input.files[0] ? input.files[0] : null);
+        input.onchange = () =>
+          resolve(input.files && input.files[0] ? input.files[0] : null);
         input.click();
       });
       if (!pick) return;
@@ -310,15 +324,20 @@ export default function KnxUpload() {
       setDropReserveFromUnknown(Boolean(cfg.options?.dropReserveFromUnknown));
       const overrideCount = Object.keys(cfg.overrides || {}).length;
       const gaCount =
-        (cfg.catalog.groupAddresses && Array.isArray(cfg.catalog.groupAddresses.flat)
+        (cfg.catalog.groupAddresses &&
+        Array.isArray(cfg.catalog.groupAddresses.flat)
           ? cfg.catalog.groupAddresses.flat.length
-          : 0) || (Array.isArray(cfg.catalog.group_addresses) ? cfg.catalog.group_addresses.length : 0);
+          : 0) ||
+        (Array.isArray(cfg.catalog.group_addresses)
+          ? cfg.catalog.group_addresses.length
+          : 0);
       const project = cfg.project ?? cfg.catalog.meta?.name ?? "Unknown";
       toast.success("Configuration loaded", {
         description: `${project} • ${gaCount} GA's • ${overrideCount} overrides`,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Could not import configuration";
+      const msg =
+        e instanceof Error ? e.message : "Could not import configuration";
       toast.error("Import failed", { description: msg });
     }
   }, []);
@@ -348,14 +367,14 @@ export default function KnxUpload() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6">
       {/* Header */}
       <div className="mb-6">
-        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 to-muted p-6">
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 to-muted p-4 sm:p-6">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-3">
-              <PackageOpen className="h-6 w-6 text-primary" />
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <PackageOpen className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
                 KNX → Home Assistant
               </h1>
             </div>
@@ -371,6 +390,9 @@ export default function KnxUpload() {
             This tool helps you convert your KNX project into a Home Assistant
             YAML configuration.
           </p>
+          <div className="mt-2 sm:hidden">
+            <VersionTag className="inline-block" />
+          </div>
         </div>
       </div>
 
@@ -442,7 +464,7 @@ export default function KnxUpload() {
             </p>
           ) : (
             <>
-              <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+              <div className="mb-4 flex flex-wrap items-center gap-3 text-xs sm:text-sm">
                 <div className="text-muted-foreground">
                   Project:{" "}
                   <span className="font-medium text-foreground">
@@ -451,10 +473,10 @@ export default function KnxUpload() {
                   <span className="mx-2">•</span>
                   {groupAddressCount} group addresses
                 </div>
-                <div className="ms-auto flex gap-2">
+                <div className="ms-auto flex flex-wrap gap-2">
                   <Button
                     variant="outline"
-                    className="cursor-pointer"
+                    className="w-full cursor-pointer sm:w-auto"
                     onClick={() =>
                       downloadText("knx_catalog.yaml", catalogYaml)
                     }
@@ -464,7 +486,7 @@ export default function KnxUpload() {
                   </Button>
                   <Button
                     variant="outline"
-                    className="cursor-pointer"
+                    className="w-full cursor-pointer sm:w-auto"
                     onClick={() =>
                       downloadText("knx_homeassistant.yaml", haYaml)
                     }

@@ -48,19 +48,19 @@ export default function UploadDropzone({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       className={[
-        "relative flex min-h-[140px] items-center justify-center rounded-xl border-2 border-dashed transition",
+        "relative flex min-h-[120px] sm:min-h-[140px] items-center justify-center rounded-xl border-2 border-dashed transition",
         isDragging
           ? "border-primary bg-primary/5"
           : "border-muted-foreground/20 hover:bg-muted/40",
       ].join(" ")}
     >
-      <div className="pointer-events-none flex flex-col items-center gap-2 text-center">
-        <UploadCloud className="h-6 w-6 opacity-80" />
-        <div className="text-sm">
+      <div className="pointer-events-none flex flex-col items-center gap-2 text-center px-3">
+        <UploadCloud className="h-5 w-5 opacity-80 sm:h-6 sm:w-6" />
+        <div className="text-xs sm:text-sm">
           Drag your <code>.knxproj</code> here or
           <span className="mx-1 font-medium">click</span> below to select
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-[0.7rem] text-muted-foreground sm:text-xs">
           Supports: <code>.knxproj</code> (ZIP met XML)
         </div>
       </div>
