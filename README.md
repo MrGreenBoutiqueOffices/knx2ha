@@ -18,10 +18,37 @@ This project is a **Next.js application** that converts KNX configuration files 
   Web interface for uploading, previewing, and exporting configurations.
  - 🔁 **Export/Import Configuration**<br>
    Save your parsed catalog plus all manual overrides to a JSON file and load it later or share with colleagues.
+ - 📦 **Home Assistant YAML Export**<br>
+   Download a single combined YAML file or a ZIP with one YAML per domain plus a root `knx.yaml` that `!include`s them.
 
-## Getting Started
+## Home Assistant YAML export
 
-To run this project locally, follow these steps:
+After parsing a KNX project, open the Export wizard to generate Home Assistant YAML. Select the entity types you want (switch, light, sensor, cover, scene, …) and choose a format.
+
+Single file
+- One YAML with a `knx:` section containing only the selected types.
+- Filename uses your project/prefix, e.g. `My_Project_knx.yaml`.
+
+ZIP per domain
+- Root `knx.yaml` with `!include` lines for each selected domain.
+- Per-domain files in `knx/`, e.g. `knx/knx_light.yaml`, `knx/knx_switch.yaml`.
+
+Use in Home Assistant
+- Copy files into your HA config folder. With ZIP, keep `knx.yaml` next to the `knx/` folder and reference it from `configuration.yaml`; or merge the generated `knx:` section into your existing config.
+- Addresses and names are auto-quoted; What you export matches the UI preview, including overrides.
+
+## Export/Import configuration
+
+After you upload and parse a KNX project, you can:
+
+- Export config: downloads a JSON snapshot containing the parsed catalog, your current options (like dropping Reserve), and all entity overrides. Use this to continue later or share your work.
+- Import config: load a previously saved JSON to restore the catalog, options, and overrides. The Home Assistant YAML view will update immediately.
+
+You’ll find the buttons near the YAML export buttons in the UI.
+
+## Development
+
+For local development, follow these steps:
 
 ### 1. Requirements
 
@@ -50,15 +77,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm run build
 npm start
 ```
-
-## Export/Import configuration
-
-After you upload and parse a KNX project, you can:
-
-- Export config: downloads a JSON snapshot containing the parsed catalog, your current options (like dropping Reserve), and all entity overrides. Use this to continue later or share your work.
-- Import config: load a previously saved JSON to restore the catalog, options, and overrides. The Home Assistant YAML view will update immediately.
-
-You’ll find the buttons near the YAML export buttons in the UI.
 
 ## Resources
 
