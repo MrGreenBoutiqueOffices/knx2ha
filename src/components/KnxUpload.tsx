@@ -7,6 +7,8 @@ import {
   buildHaEntities,
   summarizeEntities,
   haEntitiesToYaml,
+  haEntitiesToYamlForDomain,
+  HaDomain,
 } from "@/lib/knx/export";
 import { useKnxWorker } from "@/hooks/useKnxWorker";
 
@@ -24,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { PackageOpen, FileDown } from "lucide-react";
+import { Copy } from "lucide-react";
 
 import { downloadText } from "@/lib/utils/download";
 import {
@@ -36,6 +39,7 @@ import OptionsBar from "./knx/OptionsBar";
 import ProgressInfo from "./knx/ProgressInfo";
 import StatsBar from "./knx/StatsBar";
 import CodePanel from "./knx/CodePanel";
+import ExportWizard from "./knx/ExportWizard";
 import EntityConfigurator from "./entity/EntityConfigurator";
 import ThemeToggle from "@/components/ThemeToggle";
 import VersionTag from "@/components/VersionTag";
@@ -52,6 +56,14 @@ import {
   KeyedEntities,
   makeEntityKey,
 } from "./entity/entity-config";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function KnxUpload() {
   const { parse, busy, progress, progressInfo, error } = useKnxWorker();
@@ -60,6 +72,7 @@ export default function KnxUpload() {
   const [catalog, setCatalog] = useState<KnxCatalog | null>(null);
   const [dropReserveFromUnknown, setDropReserveFromUnknown] = useState(true);
   const [dzKey, setDzKey] = useState(0);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const projectName = catalog?.meta?.name ?? "Unknown";
   const groupAddressCount = useMemo(() => {
@@ -241,6 +254,36 @@ export default function KnxUpload() {
 
   const haYaml = useMemo(
     () => (adjustedEntities ? haEntitiesToYaml(adjustedEntities) : ""),
+    [adjustedEntities]
+  );
+
+  const handleCopyDomain = useCallback(
+    async (domain: HaDomain) => {
+      if (!adjustedEntities) return;
+      const yaml = haEntitiesToYamlForDomain(adjustedEntities, domain);
+      try {
+        await navigator.clipboard.writeText(yaml);
+        const labelMap: Record<HaDomain, string> = {
+          switch: "Switches",
+          binary_sensor: "Binary sensors",
+          light: "Lights",
+          sensor: "Sensors",
+          time: "Times",
+          date: "Dates",
+          datetime: "DateTimes",
+          cover: "Covers",
+          scene: "Scenes",
+          _unknown: "Unknown",
+        };
+        toast.success("Copied", {
+          description: `${labelMap[domain]} YAML copied to clipboard`,
+        });
+      } catch {
+        toast.error("Copy failed", {
+          description: "Could not copy text.",
+        });
+      }
+    },
     [adjustedEntities]
   );
 
@@ -484,16 +527,72 @@ export default function KnxUpload() {
                     <FileDown className="h-4 w-4" />
                     Catalog YAML
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full cursor-pointer sm:w-auto"
-                    onClick={() =>
-                      downloadText("knx_homeassistant.yaml", haYaml)
-                    }
-                  >
-                    <FileDown className="h-4 w-4" />
-                    Home Assistant YAML
-                  </Button>
+                  {adjustedEntities ? (
+                    <Button
+                      variant="outline"
+                      className="w-full cursor-pointer sm:w-auto"
+                      onClick={() => setExportOpen(true)}
+                    >
+                      <FileDown className="h-4 w-4" />
+                      Home Assistant YAML
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full cursor-pointer sm:w-auto"
+                      onClick={() => downloadText("knx_homeassistant.yaml", haYaml)}
+                    >
+                      <FileDown className="h-4 w-4" />
+                      Home Assistant YAML
+                    </Button>
+                  )}
+                  {adjustedEntities && summary && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full cursor-pointer sm:w-auto">
+                          <Copy className="mr-2 h-4 w-4" /> Copy per type
+                          <span className="ml-1 text-muted-foreground">▾</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Copy YAML slice</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => navigator.clipboard.writeText(haYaml).then(() => toast.success("Copied", { description: "Full YAML copied to clipboard" })).catch(() => toast.error("Copy failed", { description: "Could not copy text." }))}>
+                          All (full config)
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {summary.counts.switch > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("switch")}>Switches</DropdownMenuItem>
+                        )}
+                        {summary.counts.binary_sensor > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("binary_sensor")}>Binary sensors</DropdownMenuItem>
+                        )}
+                        {summary.counts.light > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("light")}>Lights</DropdownMenuItem>
+                        )}
+                        {summary.counts.sensor > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("sensor")}>Sensors</DropdownMenuItem>
+                        )}
+                        {summary.counts.time > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("time")}>Times</DropdownMenuItem>
+                        )}
+                        {summary.counts.date > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("date")}>Dates</DropdownMenuItem>
+                        )}
+                        {summary.counts.datetime > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("datetime")}>DateTimes</DropdownMenuItem>
+                        )}
+                        {summary.counts.cover > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("cover")}>Covers</DropdownMenuItem>
+                        )}
+                        {summary.counts.scene > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("scene")}>Scenes</DropdownMenuItem>
+                        )}
+                        {summary.counts._unknown > 0 && (
+                          <DropdownMenuItem onClick={() => handleCopyDomain("_unknown")}>Unknown</DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
 
@@ -521,6 +620,14 @@ export default function KnxUpload() {
 
         <CardFooter />
       </Card>
+        {adjustedEntities && (
+          <ExportWizard
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+            projectName={projectName}
+            entities={adjustedEntities}
+          />
+        )}
     </div>
   );
 }

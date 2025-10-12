@@ -299,6 +299,69 @@ export function haEntitiesToYaml(ent: HaEntities): string {
   return String(doc);
 }
 
+export type HaDomain =
+  | "switch"
+  | "binary_sensor"
+  | "light"
+  | "sensor"
+  | "time"
+  | "date"
+  | "datetime"
+  | "cover"
+  | "scene"
+  | "_unknown";
+
+/**
+ * Build a HaEntities object that only contains a single domain.
+ * Useful for generating per-entity-type YAML slices like just lights or switches.
+ */
+export function pickEntitiesDomain(ent: HaEntities, domain: HaDomain): HaEntities {
+  return {
+    switches: domain === "switch" ? ent.switches : [],
+    binarySensors: domain === "binary_sensor" ? ent.binarySensors : [],
+    lights: domain === "light" ? ent.lights : [],
+    sensors: domain === "sensor" ? ent.sensors : [],
+    times: domain === "time" ? ent.times : [],
+    dates: domain === "date" ? ent.dates : [],
+    datetimes: domain === "datetime" ? ent.datetimes : [],
+    covers: domain === "cover" ? ent.covers : [],
+    scenes: domain === "scene" ? ent.scenes : [],
+    unknowns: domain === "_unknown" ? ent.unknowns : [],
+  };
+}
+
+/**
+ * Generate YAML for a single Home Assistant domain under the `knx:` root.
+ */
+export function haEntitiesToYamlForDomain(ent: HaEntities, domain: HaDomain): string {
+  const single = pickEntitiesDomain(ent, domain);
+  return haEntitiesToYaml(single);
+}
+
+/**
+ * Generate YAML for only the list of a single domain (without the `knx:` root).
+ * Useful to produce files that can be included under e.g. `knx: { light: !include knx/knx_light.yaml }`.
+ */
+export function haDomainListToYaml(ent: HaEntities, domain: HaDomain): string {
+  const doc = new YAML.Document();
+  let list: unknown[] = [];
+  if (domain === "switch") list = ent.switches;
+  else if (domain === "binary_sensor") list = ent.binarySensors;
+  else if (domain === "light") list = ent.lights;
+  else if (domain === "sensor") list = ent.sensors;
+  else if (domain === "time") list = ent.times;
+  else if (domain === "date") list = ent.dates;
+  else if (domain === "datetime") list = ent.datetimes;
+  else if (domain === "cover") list = ent.covers;
+  else if (domain === "scene") list = ent.scenes;
+  else if (domain === "_unknown") list = ent.unknowns;
+
+  // Reuse domainListToYaml for consistent quoting/formatting
+  const seq = domainListToYaml(doc as Document.Parsed, list as object[]);
+  doc.contents = seq;
+  return String(doc);
+}
+
 // Keep these types exported to help tests/consumers using legacy shape
 
 export function toCatalogYaml(catalog: KnxCatalog | LegacyCatalog): string {
