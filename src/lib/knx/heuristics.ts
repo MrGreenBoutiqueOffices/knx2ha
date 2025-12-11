@@ -6,7 +6,7 @@ function isStatusName(name: string): boolean {
 }
 
 function isCoverLike(name: string): boolean {
-  return /(rolluik|jaloezie|lamel|screen|blind|shutter|cover|gordijn|raam)/i.test(
+  return /(rolluik|jaloezie|lamel|screen|blind|shutter|cover|gordijn|raam|zonwering|zonnescherm|awning|louver|stores|volet)/i.test(
     name
   );
 }
@@ -23,24 +23,18 @@ export function isLA(name: string): boolean {
 }
 
 export function guessEntityType(dpt: string | undefined, name: string, address?: string): HAType {
-  // Central group: treat 0/1/* as scenes regardless of DPT
-  if (address && address.startsWith("0/1/")) return "scene";
-
-  // Lighting mapping based on main=1
-  if (address) {
-    const m = address.match(/^(\d+)\/(\d+)\/(\d+)$/);
-    if (m) {
-      const main = Number(m[1]);
-      const middle = Number(m[2]);
-      if (main === 1) {
-        // 1/1 and 1/5 are on/off; 1/2 is dimming step; 1/3 and 1/4 brightness
-        if (middle === 1 || middle === 5) return "light";
-        if (middle === 2) return "light";
-        if (middle === 3 || middle === 4) return "light";
-        // 1/0, 1/6, 1/7 are central; leave to other logic (unknown/switch)
-      }
+  // 1. User hints (optional explicit override)
+  const hintMatch = name.match(/\[(\w+)\]/);
+  if (hintMatch) {
+    const hint = hintMatch[1].toLowerCase();
+    if (['switch', 'light', 'cover', 'sensor', 'binary_sensor', 'scene'].includes(hint)) {
+      return hint as HAType;
     }
   }
+
+  // 2. Central group override
+  if (address && address.startsWith("0/1/")) return "scene";
+
   const nd = normalizeDptToHyphen(dpt);
   const dot = normalizeDptToDot(dpt);
   const lowerName = name.toLowerCase();
@@ -54,63 +48,100 @@ export function guessEntityType(dpt: string | undefined, name: string, address?:
   const isDateDpt = dot === "11.001" || nd === "11-1";
   const isDateTimeDpt = dot === "19.001" || nd === "19-1";
 
-  // If the name clearly indicates a scene, honor that before strict DPT handling
+  // 3. Scene name hints (before DPT to allow override)
   if (isSceneLikeName(lowerName)) {
     return "scene";
   }
 
-  if (isDateTimeDpt) {
-    if (explicitDateTimeHint || hasBothTimeAndDateHints) {
-      return "datetime";
-    }
-    if (!isSwitchLike) return "datetime";
-  }
-
-  if (isTimeDpt) {
-    if (hasTimeHint) return "time";
-    if (!isSwitchLike) return "time";
-  }
-
-  if (isDateDpt) {
-    if (hasDateHint) return "date";
-    if (!isSwitchLike) return "date";
-  }
-
+  // 4. DPT-based HARD classification (HIGHEST PRIORITY after scene names)
   if (nd) {
-    // KNX scenes are commonly DPT 18.* (DPT_SceneControl) or 17.* (scene number)
+    // Scenes by DPT
     if (nd.startsWith("18-") || nd === "18" || nd.startsWith("17-") || nd === "17") {
       return "scene";
     }
-    if (nd === "1-1") return isStatusName(name) ? "binary_sensor" : "switch";
+
+    // Time/Date/DateTime
+    if (isDateTimeDpt) {
+      if (explicitDateTimeHint || hasBothTimeAndDateHints) return "datetime";
+      if (!isSwitchLike) return "datetime";
+    }
+    if (isTimeDpt) {
+      if (hasTimeHint) return "time";
+      if (!isSwitchLike) return "time";
+    }
+    if (isDateDpt) {
+      if (hasDateHint) return "date";
+      if (!isSwitchLike) return "date";
+    }
+
+    // CRITICAL: Boolean DPT 1.1 = switch, NOT light (unless in aggregate context)
+    if (nd === "1-1") {
+      return isStatusName(name) ? "binary_sensor" : "switch";
+    }
+
+    // DPT 1.5 (alarm/fault), 1.6 (binary value), 1.9 (open/close) = binary sensors
+    if (nd === "1-5" || nd === "1-6" || nd === "1-9") {
+      return "binary_sensor";
+    }
+
+    // DPT 1.10 (start/stop) could be binary sensor or switch depending on name
+    if (nd === "1-10") {
+      return isStatusName(name) ? "binary_sensor" : "switch";
+    }
+
+    // Dimming control = light component
     if (nd === "3-7") return "light";
-    if (nd === "5-1")
-      return isLA(name) ? "light" : isCoverLike(name) ? "cover" : "sensor"; // brightness vs position
-    if (nd === "5-3") return isCoverLike(name) ? "cover" : "sensor"; // tilt/angle
-    if (
-      nd.startsWith("7-") ||
-      nd.startsWith("8-") ||
-      nd.startsWith("9-") ||
-      nd === "9"
-    )
+
+    // DPT 5.1: Cover keywords have priority over LA prefix!
+    if (nd === "5-1") {
+      if (isCoverLike(name)) return "cover";  // Cover first!
+      if (isLA(name)) return "light";
+      if (/(brightness|helderheid)/i.test(name)) return "light";
       return "sensor";
+    }
+
+    // DPT 5.3: Angle (cover or sensor)
+    if (nd === "5-3") {
+      return isCoverLike(name) ? "cover" : "sensor";
+    }
+
+    // Sensor DPTs
+    if (nd.startsWith("7-") || nd.startsWith("8-") || nd.startsWith("9-") || nd === "9") {
+      return "sensor";
+    }
     if (nd === "12-1" || nd.startsWith("12-")) return "sensor";
 
+    // Cover DPTs
     if (nd === "1-7" || nd === "1-8" || nd === "1-10") return "cover";
-    if (nd === "1-2") return "switch";
-    if (nd === "2-1") return "switch";
-    if (nd === "20-102") return "sensor";
+
+    // Other switch DPTs
+    if (nd === "1-2" || nd === "2-1") return "switch";
+
+    // Other sensor DPTs
+    if (nd === "20-102" || nd === "20-105") return "sensor";  // 20.102 = time delay, 20.105 = HVAC mode
   }
 
+  // 5. Strong name-based hints
   if (isLA(name) || /(licht|light|lamp|dim)/.test(lowerName)) return "light";
   if (isCoverLike(name)) return "cover";
   if (isSceneLikeName(lowerName)) return "scene";
-  if (
-    /(temp|temperatuur|temperature|hum|co2|lux|druk|pressure|wind|rain|flow)/.test(
-      lowerName
-    )
-  )
+  if (/(temp|temperatuur|temperature|hum|co2|lux|druk|pressure|wind|rain|flow)/.test(lowerName)) {
     return "sensor";
+  }
   if (isStatusName(name)) return "binary_sensor";
+
+  // 6. Address pattern as LAST fallback (only if DPT unknown)
+  if (!nd && address) {
+    const m = address.match(/^(\d+)\/(\d+)\/(\d+)$/);
+    if (m) {
+      const main = Number(m[1]);
+      const middle = Number(m[2]);
+      if (main === 1 && [1, 2, 3, 4, 5].includes(middle)) {
+        return "light";  // Only as fallback when DPT is unknown
+      }
+    }
+  }
+
   if (isSwitchLike) return "switch";
   return "unknown";
 }
