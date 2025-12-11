@@ -118,8 +118,10 @@ export function buildAddressLightAggregates(gas: GroupAddress[]): LightAggregate
     }
   }
 
+  // Only return aggregates that have brightness OR dimming (not just on/off)
+  // Pure on/off switches should be handled by switch aggregation
   return Array.from(groups.values()).filter(
-    (a) => a.on_off || a.brightness || a.dimming
+    (a) => a.brightness || a.dimming
   );
 }
 
@@ -211,6 +213,80 @@ export function buildLinkedLightAggregates(
   });
 
   return out;
+}
+
+/** ====================== NAME-BASED LIGHT AGGREGATE ====================== */
+export function buildNameBasedLightAggregates(
+  gas: GroupAddress[]
+): LightAggregate[] {
+  // Group by base name (strip common suffixes like s, d, w, status, aan, uit)
+  const byBase = new Map<string, {
+    agg: LightAggregate;
+    candidates: GroupAddress[];
+  }>();
+
+  const stripSuffix = (name: string): string => {
+    return name
+      .replace(/\s+(s|d|w|status|aan|uit|on|off)$/i, '')
+      .trim();
+  };
+
+  // First pass: group candidates by base name
+  for (const ga of gas) {
+    const baseName = stripSuffix(ga.name ?? '');
+    if (!baseName) continue;
+
+    let entry = byBase.get(baseName);
+    if (!entry) {
+      entry = {
+        agg: { name: baseName, consumedIds: new Set<string>() },
+        candidates: []
+      };
+      byBase.set(baseName, entry);
+    }
+    entry.candidates.push(ga);
+  }
+
+  // Second pass: build light aggregates from candidates
+  const results: LightAggregate[] = [];
+
+  for (const [baseName, { agg, candidates }] of byBase.entries()) {
+    // Look for pattern: " s" (switch), " d" (dim), " w" (brightness)
+    for (const ga of candidates) {
+      const suffix = ga.name?.match(/\s+(s|d|w)$/i)?.[1]?.toLowerCase();
+      const dpt = normalizeDptToHyphen(ga.dpt);
+
+      // Match suffix + DPT combination
+      if (suffix === 's' && dpt === '1-1') {
+        agg.on_off = ga.address;
+        agg.consumedIds.add(ga.id);
+      } else if (suffix === 'd' && dpt === '3-7') {
+        agg.dimming = ga.address;
+        agg.consumedIds.add(ga.id);
+      } else if (suffix === 'w' && dpt === '5-1') {
+        agg.brightness = ga.address;
+        agg.consumedIds.add(ga.id);
+      }
+
+      // Also check for status variants (without suffix but with "status" in name)
+      if (!suffix && /status/i.test(ga.name ?? '')) {
+        if (dpt === '1-1') {
+          agg.on_off_state = ga.address;
+          agg.consumedIds.add(ga.id);
+        } else if (dpt === '5-1') {
+          agg.brightness_state = ga.address;
+          agg.consumedIds.add(ga.id);
+        }
+      }
+    }
+
+    // Only include if we have at least on/off OR brightness
+    if (agg.on_off || agg.brightness) {
+      results.push(agg);
+    }
+  }
+
+  return results;
 }
 
 /** ====================== SWITCH AGGREGATE ====================== */

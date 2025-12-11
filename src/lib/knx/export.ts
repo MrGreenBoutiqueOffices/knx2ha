@@ -19,6 +19,7 @@ import {
   buildLaLightAggregates,
   buildLinkedLightAggregates,
   buildAddressLightAggregates,
+  buildNameBasedLightAggregates,
   buildSwitchAggregates,
   buildCoverAggregates,
   collectConsumedIds,
@@ -110,28 +111,62 @@ export function buildHaEntities(
     ? new Map<string, KnxLinkInfo>((catalog as KnxCatalog).links!.map((l) => [l.gaId, l]))
     : undefined;
 
-  // Link-driven aggregates
-  const linkedLaAggs = buildLinkedLightAggregates(
+  // Collect light aggregates from multiple strategies
+  const linkedAggs = buildLinkedLightAggregates(
     (catalog as LegacyCatalog).group_addresses ?? [],
     linksByGa
   );
-  const addrAggs = linkedLaAggs.length
-    ? []
-    : buildAddressLightAggregates((catalog as LegacyCatalog).group_addresses ?? []);
-  const laAggs = linkedLaAggs.length
-    ? linkedLaAggs
-    : addrAggs.length
-    ? addrAggs
-    : buildLaLightAggregates((catalog as LegacyCatalog).group_addresses ?? []);
-  for (const a of laAggs) {
-    if (!a.on_off) continue;
-    const entry: HaLight = { name: a.name, address: a.on_off };
+  const addressAggs = buildAddressLightAggregates((catalog as LegacyCatalog).group_addresses ?? []);
+  const laPatternAggs = buildLaLightAggregates((catalog as LegacyCatalog).group_addresses ?? []);
+  const nameBasedAggs = buildNameBasedLightAggregates((catalog as LegacyCatalog).group_addresses ?? []);
+
+  // Combine and deduplicate all light aggregates
+  const allLightAggs = [...linkedAggs, ...addressAggs, ...laPatternAggs, ...nameBasedAggs];
+
+  // Deduplicate: keep aggregate with most fields for each unique address
+  const dedupedLightAggs = (() => {
+    const byKey = new Map<string, typeof allLightAggs[0]>();
+    for (const agg of allLightAggs) {
+      const key = agg.on_off || agg.brightness || '';
+      if (!key) continue;
+
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, agg);
+        continue;
+      }
+
+      // Count fields to determine which aggregate is more complete
+      const countFields = (a: typeof agg) =>
+        [a.on_off, a.on_off_state, a.dimming, a.brightness, a.brightness_state].filter(Boolean).length;
+
+      if (countFields(agg) > countFields(existing)) {
+        // Merge consumed IDs
+        agg.consumedIds = new Set([...existing.consumedIds, ...agg.consumedIds]);
+        byKey.set(key, agg);
+      } else {
+        // Keep existing, but merge consumed IDs
+        existing.consumedIds = new Set([...existing.consumedIds, ...agg.consumedIds]);
+      }
+    }
+    return Array.from(byKey.values());
+  })();
+
+  // Export deduplicated lights
+  for (const a of dedupedLightAggs) {
+    if (!a.on_off && !a.brightness) continue;
+    const entry: HaLight = {
+      name: a.name,
+      address: a.on_off || a.brightness!
+    };
     if (a.on_off_state) entry.state_address = a.on_off_state;
     if (a.brightness) entry.brightness_address = a.brightness;
     if (a.brightness_state) entry.brightness_state_address = a.brightness_state;
     if (!(dropReserve && (entry.name ?? "").trim().toLowerCase() === "reserve"))
       lights.push(entry);
   }
+
+  const laAggs = dedupedLightAggs;  // For consumed tracking
 
   const switchAggs = buildSwitchAggregates((catalog as LegacyCatalog).group_addresses ?? [], linksByGa);
   for (const s of switchAggs) {
@@ -161,8 +196,29 @@ export function buildHaEntities(
   }
 
   const consumed = collectConsumedIds(laAggs, switchAggs, coverAggs);
+
+  // Track consumed addresses (not just IDs) to prevent duplicates
+  const consumedAddresses = new Set<string>();
+
+  // Helper to collect addresses from any aggregate type
+  const collectAddresses = (obj: any) => {
+    const keys = Object.keys(obj);
+    for (const key of keys) {
+      const val = obj[key];
+      if (typeof val === 'string' && key.includes('address')) {
+        consumedAddresses.add(val);
+      }
+    }
+  };
+
+  // Collect from all aggregates
+  for (const agg of laAggs) collectAddresses(agg);
+  for (const agg of switchAggs) collectAddresses(agg);
+  for (const agg of coverAggs) collectAddresses(agg);
+
   for (const ga of (catalog as LegacyCatalog).group_addresses ?? []) {
     if (consumed.has(ga.id)) continue;
+    if (consumedAddresses.has(ga.address)) continue;  // Skip duplicate addresses
 
     const mapped = mapSingleGaToEntity(ga);
     switch (mapped.domain) {
