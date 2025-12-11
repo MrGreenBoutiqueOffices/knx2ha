@@ -36,6 +36,14 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link
+                  href="/about"
+                  className="transition-colors hover:text-primary"
+                >
+                  About & Parsing
+                </Link>
+              </li>
+              <li>
                 <a
                   href="https://github.com/MrGreenBoutiqueOffices/knx2ha"
                   target="_blank"
