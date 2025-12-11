@@ -20,7 +20,7 @@ export function Navigation() {
           </div>
           <div className="leading-tight">
             <div className="flex items-center gap-2">
-              <span className="block text-base font-bold tracking-tight text-foreground">KNX2HA</span>
+              <span className="block text-base font-bold tracking-tight text-foreground">KNX2HOME</span>
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
                 Beta
               </span>
@@ -72,8 +72,8 @@ export function Navigation() {
             className="hidden sm:inline-flex border-border/60 text-foreground hover:border-primary/50"
             asChild
           >
-            <a
-              href="https://github.com/MrGreenBoutiqueOffices/knx2ha"
+              <a
+                href="https://github.com/MrGreenBoutiqueOffices/knx2home"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub Repository"

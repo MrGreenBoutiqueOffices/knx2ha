@@ -39,7 +39,7 @@ export function HeroSection() {
                 size="lg"
                 className="px-6 text-base font-semibold border-border"
               >
-                <a href="https://github.com/MrGreenBoutiqueOffices/knx2ha" target="_blank" rel="noreferrer">
+                <a href="https://github.com/MrGreenBoutiqueOffices/knx2home" target="_blank" rel="noreferrer">
                   View on GitHub
                 </a>
               </Button>

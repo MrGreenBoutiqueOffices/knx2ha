@@ -11,7 +11,7 @@ export type SavedEntityOverrides = Record<string, SavedEntityOverride>;
 
 export interface SavedConfigV1 {
   version: 1;
-  tool: "knx2ha";
+  tool: "knx2home";
   savedAt: string; // ISO string
   project?: string;
   options: {
@@ -31,7 +31,7 @@ export function buildSavedConfig(input: {
   const { catalog, overrides, dropReserveFromUnknown } = input;
   return {
     version: 1,
-    tool: "knx2ha",
+    tool: "knx2home",
     savedAt: new Date().toISOString(),
     project: catalog?.meta?.name ?? "Unknown",
     options: { dropReserveFromUnknown: Boolean(dropReserveFromUnknown) },
@@ -48,7 +48,7 @@ export function stringifySavedConfig(cfg: SavedConfig): string {
 export function parseSavedConfig(text: string): SavedConfig {
   const raw = JSON.parse(text);
   if (!raw || typeof raw !== "object") throw new Error("Invalid config file");
-  if (raw.version !== 1 || raw.tool !== "knx2ha")
+  if (raw.version !== 1 || raw.tool !== "knx2home")
     throw new Error("Unsupported or unknown config format");
 
   // Light validation of essential fields
@@ -77,7 +77,7 @@ export function parseSavedConfig(text: string): SavedConfig {
 
   const out: SavedConfigV1 = {
     version: 1,
-    tool: "knx2ha",
+    tool: "knx2home",
     savedAt: typeof raw.savedAt === "string" ? raw.savedAt : new Date().toISOString(),
     project: raw.project ?? raw.catalog?.meta?.name ?? "Unknown",
     options: { dropReserveFromUnknown: Boolean(options.dropReserveFromUnknown) },

@@ -15,7 +15,7 @@ export default function AboutPage() {
       <div className="container mx-auto px-4 py-16 max-w-4xl">
         {/* Header */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl font-bold mb-4">About KNX2HA</h1>
+          <h1 className="text-4xl font-bold mb-4">About KNX2HOME</h1>
           <p className="text-xl text-muted-foreground">
             Understanding KNX project file parsing
           </p>
@@ -27,10 +27,10 @@ export default function AboutPage() {
           <section className="prose prose-neutral dark:prose-invert max-w-none">
             <h2 className="flex items-center gap-2 text-2xl font-semibold mb-4">
               <Lightbulb className="w-6 h-6" />
-              What does KNX2HA do?
+              What does KNX2HOME do?
             </h2>
             <p className="text-muted-foreground">
-              KNX2HA is a tool that analyzes KNX project files (.knxproj) and automatically
+              KNX2HOME is a tool that analyzes KNX project files (.knxproj) and automatically
               generates Home Assistant configurations. The goal is to speed up and simplify
               the manual configuration of KNX devices in Home Assistant.
             </p>
@@ -80,7 +80,7 @@ export default function AboutPage() {
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   KNX group addresses are flat - there's no explicit structure that says
-                  "these 3 addresses form one light entity". KNX2HA must infer this through:
+                  "these 3 addresses form one light entity". KNX2HOME must infer this through:
                 </p>
                 <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc list-inside">
                   <li>Device channel analysis (most reliable)</li>
@@ -100,7 +100,7 @@ export default function AboutPage() {
               Multi-strategy approach
             </h2>
             <p className="text-muted-foreground mb-4">
-              To properly parse different project files, KNX2HA uses multiple strategies in
+              To properly parse different project files, KNX2HOME uses multiple strategies in
               order of reliability:
             </p>
             <ol className="space-y-3 text-sm text-muted-foreground list-decimal list-inside">
@@ -139,7 +139,7 @@ export default function AboutPage() {
             </h2>
             <div className="space-y-3 text-sm text-muted-foreground">
               <p>
-                <strong>KNX2HA is a tool, not a replacement for manual verification.</strong>
+                <strong>KNX2HOME is a tool, not a replacement for manual verification.</strong>
               </p>
               <p>
                 Our tests and validation show a classification accuracy of approximately <strong>~95%</strong> for
@@ -228,11 +228,11 @@ export default function AboutPage() {
           <section className="text-center py-8">
             <h2 className="text-2xl font-semibold mb-4">Open Source</h2>
             <p className="text-muted-foreground mb-4">
-              KNX2HA is open source software. Contributions, bug reports, and feature requests
+              KNX2HOME is open source software. Contributions, bug reports, and feature requests
               are welcome!
             </p>
             <a
-              href="https://github.com/MrGreenBoutiqueOffices/knx2ha"
+              href="https://github.com/MrGreenBoutiqueOffices/knx2home"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"

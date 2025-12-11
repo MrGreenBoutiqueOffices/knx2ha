@@ -247,7 +247,7 @@ export default function KnxUpload() {
       dropReserveFromUnknown,
     });
     const filenameSafe = (projectName || "project").replace(/[^a-z0-9_-]+/gi, "_");
-    downloadText(`${filenameSafe}_knx2ha_config.json`, stringifySavedConfig(cfg));
+    downloadText(`${filenameSafe}_knx2home_config.json`, stringifySavedConfig(cfg));
   }, [catalog, entityOverrides, dropReserveFromUnknown, projectName]);
 
   const handleImportConfig = useCallback(async () => {

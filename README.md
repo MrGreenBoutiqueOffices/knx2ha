@@ -1,4 +1,4 @@
-# KNX2HA Parser
+# KNX2HOME Parser
 
 This project is a **Next.js application** that converts KNX configuration files into **Home Assistant compatible YAML configuration**. It automatically detects entities (lights, switches, covers, sensors, …) and annotates them for direct use in Home Assistant.
 
