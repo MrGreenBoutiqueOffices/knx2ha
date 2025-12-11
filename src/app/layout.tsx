@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KNX2HA - Convert KNX to Home Assistant",
+  title: "KNX2HOME - Convert KNX to Home Assistant",
   description: "Professional KNX to Home Assistant converter. Transform your KNX project files into ready-to-use YAML configurations instantly.",
 };
 
