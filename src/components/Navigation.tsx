@@ -52,6 +52,17 @@ export function Navigation() {
           >
             Converter
           </Link>
+          <Link
+            href="/about"
+            className={cn(
+              "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              pathname === "/about"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+            )}
+          >
+            About
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2">

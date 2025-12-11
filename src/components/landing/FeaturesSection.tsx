@@ -51,7 +51,7 @@ const features = [
   },
   {
     icon: Shield,
-    title: "100% Privé",
+    title: "100% Private",
     description:
       "Your data never leaves your device. Everything runs client-side in your browser. Zero privacy worries.",
     gradient: "from-green-500 via-lime-500 to-emerald-500",

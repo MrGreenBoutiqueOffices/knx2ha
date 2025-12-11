@@ -5,11 +5,13 @@ import { Footer } from "@/components/landing/Footer";
 
 export default function Page() {
   return (
-    <main className="min-h-screen">
-      <HeroSection />
-      <FeaturesSection />
-      <HowItWorksSection />
+    <>
+      <main className="min-h-screen">
+        <HeroSection />
+        <FeaturesSection />
+        <HowItWorksSection />
+      </main>
       <Footer />
-    </main>
+    </>
   );
 }
