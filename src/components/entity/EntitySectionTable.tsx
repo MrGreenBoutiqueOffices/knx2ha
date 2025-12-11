@@ -1,13 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
-import { ChevronDown } from "lucide-react";
+import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { ChevronDown, Lightbulb, ToggleLeft, Gauge, DoorOpen, Clock, Calendar, CalendarClock, Clapperboard, Binary, HelpCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,8 +67,8 @@ function PrimaryCell({ value, addressIndex }: { value: string; addressIndex?: Re
       <TooltipContent>
         <div className="flex flex-col text-xs">
           <span className="font-medium">{info.name ?? "Unnamed GA"}</span>
-          {info.dpt ? <span className="text-muted-foreground">DPT {info.dpt}</span> : null}
-          {info.id ? <span className="text-muted-foreground">ID {info.id}</span> : null}
+          {info.dpt ? <span>DPT {info.dpt}</span> : null}
+          {info.id ? <span>ID {info.id}</span> : null}
         </div>
       </TooltipContent>
     </Tooltip>
@@ -123,8 +119,8 @@ function AddressBadgeList({ items, addressIndex }: { items: AddressBadgeProps[];
             <TooltipContent>
               <div className="flex flex-col text-xs">
                 <span className="font-medium">{info.name ?? "Unnamed GA"}</span>
-                {info.dpt ? <span className="text-muted-foreground">DPT {info.dpt}</span> : null}
-                {info.id ? <span className="text-muted-foreground">ID {info.id}</span> : null}
+                {info.dpt ? <span>DPT {info.dpt}</span> : null}
+                {info.id ? <span>ID {info.id}</span> : null}
               </div>
             </TooltipContent>
           </Tooltip>
@@ -194,11 +190,11 @@ function createColumns(
                 name: event.target.value,
               })
             }
-            className="h-8 text-xs md:h-9 md:text-sm"
+            className="h-8 bg-white text-xs transition hover:bg-white focus:bg-white dark:bg-card dark:hover:bg-card dark:focus:bg-card md:h-9 md:text-sm"
           />
         );
       },
-  meta: { className: "md:sticky md:left-0 md:z-10 md:bg-background min-w-[12rem]" } as Meta,
+  meta: { className: "md:sticky md:left-0 md:z-10 md:bg-transparent min-w-[12rem]" } as Meta,
     },
     {
       accessorKey: "primary",
@@ -215,7 +211,9 @@ function createColumns(
           <TooltipTrigger asChild>
             <span className="cursor-help">Commands</span>
           </TooltipTrigger>
-          <TooltipContent>Open/close/stop addresses for the cover.</TooltipContent>
+          <TooltipContent>
+            Open/close/stop addresses for the cover.
+          </TooltipContent>
         </Tooltip>
       ),
       cell: ({ row }) => {
@@ -239,7 +237,9 @@ function createColumns(
           <TooltipTrigger asChild>
             <span className="cursor-help">Position</span>
           </TooltipTrigger>
-          <TooltipContent>Command/state group addresses for slat position.</TooltipContent>
+          <TooltipContent>
+            Command/state group addresses for slat position.
+          </TooltipContent>
         </Tooltip>
       ),
       cell: ({ row }) => {
@@ -262,7 +262,9 @@ function createColumns(
           <TooltipTrigger asChild>
             <span className="cursor-help">Angle</span>
           </TooltipTrigger>
-          <TooltipContent>Command/state group addresses for tilt angle.</TooltipContent>
+          <TooltipContent>
+            Command/state group addresses for tilt angle.
+          </TooltipContent>
         </Tooltip>
       ),
       cell: ({ row }) => {
@@ -366,7 +368,9 @@ function createColumns(
           <TooltipTrigger asChild>
             <span className="cursor-help">Respond</span>
           </TooltipTrigger>
-          <TooltipContent>Indicates whether the switch replies to read requests.</TooltipContent>
+          <TooltipContent>
+            Indicates whether the switch replies to read requests.
+          </TooltipContent>
         </Tooltip>
       ),
       cell: ({ row }) => {
@@ -428,7 +432,9 @@ function createColumns(
           <TooltipTrigger asChild>
             <span className="cursor-help">Brightness</span>
           </TooltipTrigger>
-          <TooltipContent>Dimming command group address (if available).</TooltipContent>
+          <TooltipContent>
+            Dimming command group address (if available).
+          </TooltipContent>
         </Tooltip>
       ),
       cell: ({ row }) => {
@@ -467,7 +473,9 @@ function createColumns(
           <TooltipTrigger asChild>
             <span className="cursor-help">Type</span>
           </TooltipTrigger>
-          <TooltipContent>KNX sensor type (e.g. temperature, humidity).</TooltipContent>
+          <TooltipContent>
+            KNX sensor type (e.g. temperature, humidity).
+          </TooltipContent>
         </Tooltip>
       ),
       cell: ({ row }) => {
@@ -529,6 +537,31 @@ export function EntitySectionTable({
   collapsed,
   onToggle,
 }: EntitySectionTableProps) {
+  const ICONS: Record<EntityDomain, React.ComponentType<{ className?: string }>> = {
+    switch: ToggleLeft,
+    light: Lightbulb,
+    binary_sensor: Binary,
+    sensor: Gauge,
+    time: Clock,
+    date: Calendar,
+    datetime: CalendarClock,
+    cover: DoorOpen,
+    scene: Clapperboard,
+    _unknown: HelpCircle,
+  };
+  const COLOR_MAP: Record<EntityDomain, string> = {
+    switch: "text-blue-500",
+    light: "text-amber-500",
+    binary_sensor: "text-purple-500",
+    sensor: "text-green-500",
+    time: "text-cyan-500",
+    date: "text-pink-500",
+    datetime: "text-indigo-500",
+    cover: "text-orange-500",
+    scene: "text-violet-500",
+    _unknown: "text-gray-500",
+  };
+
   const columns = useMemo(
     () => createColumns(section.domain, addressIndex, onChange, onReset),
     [section.domain, addressIndex, onChange, onReset]
@@ -541,19 +574,28 @@ export function EntitySectionTable({
   });
 
   return (
-    <section className="space-y-2">
-      <div className="rounded-lg border border-border/60">
+    <section className="space-y-1.5">
+      <div className="group overflow-hidden rounded-xl border border-border/70 bg-gradient-to-r from-muted/60 via-card to-card shadow-sm">
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={!collapsed}
-          className="flex w-full cursor-pointer items-center justify-between bg-muted/40 px-2 py-2 text-left sm:px-3"
+          className="flex w-full cursor-pointer items-center justify-between px-3 py-2 text-left transition"
         >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted/70 text-foreground">
+            {(() => {
+              const Icon = ICONS[section.domain];
+              const color = COLOR_MAP[section.domain];
+              return Icon ? <Icon className={cn("h-5 w-5", color)} /> : <span className="text-sm font-semibold">{section.label.charAt(0)}</span>;
+            })()}
+          </div>
           <span className="text-sm font-semibold">{section.label}</span>
+        </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {section.rows.length} {section.rows.length === 1 ? "entity" : "entities"}
-            </span>
+            <Badge variant="secondary" className="text-[0.7rem] font-semibold shadow-sm">
+              {section.rows.length}
+            </Badge>
             <ChevronDown
               className={cn(
                 "h-4 w-4 transition-transform",
@@ -563,13 +605,19 @@ export function EntitySectionTable({
           </div>
         </button>
         {!collapsed && (
-          <div className="border-t border-border/60">
+          <div className="border-t border-border/60 bg-white dark:bg-background/90">
             <Table>
               <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} className={(header.column.columnDef as ColumnDef<EntityTableRow> & { meta?: { className?: string } }).meta?.className}>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="bg-white dark:bg-background">
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className={cn(
+                        "text-xs font-semibold text-muted-foreground",
+                          (header.column.columnDef as ColumnDef<EntityTableRow> & { meta?: { className?: string } }).meta?.className
+                        )}
+                      >
                         {header.isPlaceholder
                           ? null
                           : flexRender(
@@ -583,10 +631,19 @@ export function EntitySectionTable({
               </TableHeader>
               <TableBody>
                 {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow key={row.id}>
+                  table.getRowModel().rows.map((row, idx) => (
+                    <TableRow
+                      key={row.id}
+                      className={cn(
+                        idx % 2 === 0 ? "bg-white dark:bg-background/85" : "bg-white/80 dark:bg-background/70",
+                        "hover:bg-muted/30 dark:hover:bg-muted/20"
+                      )}
+                    >
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className={(cell.column.columnDef as ColumnDef<EntityTableRow> & { meta?: { className?: string } }).meta?.className}>
+                        <TableCell
+                          key={cell.id}
+                          className={(cell.column.columnDef as ColumnDef<EntityTableRow> & { meta?: { className?: string } }).meta?.className}
+                        >
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext()
