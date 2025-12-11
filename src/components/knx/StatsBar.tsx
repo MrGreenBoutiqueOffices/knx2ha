@@ -3,59 +3,105 @@
 import { Badge } from "@/components/ui/badge";
 import type { EntitySummary } from "@/lib/knx/export";
 import { SENSOR_META } from "@/lib/knx/sensorMeta";
+import {
+  Lightbulb,
+  ToggleLeft,
+  Gauge,
+  DoorOpen,
+  Clock,
+  Calendar,
+  CalendarClock,
+  Clapperboard,
+  Binary,
+  HelpCircle,
+} from "lucide-react";
+
+const DOMAIN_ICONS = {
+  switch: ToggleLeft,
+  light: Lightbulb,
+  binary_sensor: Binary,
+  sensor: Gauge,
+  time: Clock,
+  date: Calendar,
+  datetime: CalendarClock,
+  cover: DoorOpen,
+  scene: Clapperboard,
+  _unknown: HelpCircle,
+};
+
+const DOMAIN_COLORS = {
+  switch: "text-blue-500",
+  light: "text-amber-500",
+  binary_sensor: "text-purple-500",
+  sensor: "text-green-500",
+  time: "text-cyan-500",
+  date: "text-pink-500",
+  datetime: "text-indigo-500",
+  cover: "text-orange-500",
+  scene: "text-violet-500",
+  _unknown: "text-gray-500",
+};
 
 export default function StatsBar({ summary }: { summary: EntitySummary }) {
+  const unknownCount = summary.counts._unknown;
+  const totalCount = summary.counts.total;
+
   return (
-    <>
-  <div className="mb-3 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-        <Badge variant="outline">switch: {summary.counts.switch}</Badge>
-        <Badge variant="outline">light: {summary.counts.light}</Badge>
-        <Badge variant="outline">
-          binary_sensor: {summary.counts.binary_sensor}
-        </Badge>
-        <Badge variant="outline">sensor: {summary.counts.sensor}</Badge>
-        <Badge variant="outline">time: {summary.counts.time}</Badge>
-        <Badge variant="outline">date: {summary.counts.date}</Badge>
-        <Badge variant="outline">datetime: {summary.counts.datetime}</Badge>
-        <Badge variant="outline">cover: {summary.counts.cover}</Badge>
-        <Badge variant="outline">scene: {summary.counts.scene}</Badge>
-        {summary.counts._unknown > 0 && (
-          <Badge
-            variant="outline"
-            className="border-destructive text-destructive"
-          >
-            _unknown: {summary.counts._unknown}
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-md bg-destructive/15 p-1.5">
+              <HelpCircle className="h-4 w-4 text-destructive" strokeWidth={2} />
+            </div>
+            <span className="text-sm font-semibold">Unknown</span>
+          </div>
+          <Badge className="bg-destructive text-destructive-foreground font-bold">
+            {unknownCount}
           </Badge>
-        )}
-        <span className="ms-auto w-full text-right text-[0.7rem] text-muted-foreground sm:w-auto sm:text-xs">
-          Total: {summary.counts.total}
-        </span>
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-md bg-primary/15 p-1.5">
+              <Gauge className="h-4 w-4 text-primary" strokeWidth={2} />
+            </div>
+            <span className="text-sm font-semibold">Total</span>
+          </div>
+          <Badge className="bg-primary text-primary-foreground font-bold">
+            {totalCount}
+          </Badge>
+        </div>
       </div>
 
+      {/* Sensor Types - keep for context */}
       {Object.keys(summary.sensorsByType).length > 0 && (
-        <div className="mb-3 text-[0.7rem] text-muted-foreground sm:text-xs">
-          Sensor types:&nbsp;
-          {Object.entries(summary.sensorsByType)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 8)
-            .map(([type, count]) => {
-              const meta = SENSOR_META[type] ?? {};
-              const Icon = meta.Icon;
-              return (
-                <span key={type} className="me-3 inline-flex items-center gap-1">
-                  {Icon ? (
-                    <Icon className="h-3 w-3 text-muted-foreground sm:h-3.5 sm:w-3.5" />
-                  ) : null}
-                  <code>{type}</code>
-                  {meta.unit ? (
-                    <span className="text-muted-foreground">({meta.unit})</span>
-                  ) : null}
-                  × {count}
-                </span>
-              );
-            })}
+        <div className="space-y-2 border-t pt-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Sensor Types
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(summary.sensorsByType)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 8)
+              .map(([type, count]) => {
+                const meta = SENSOR_META[type] ?? {};
+                const Icon = meta.Icon;
+                return (
+                  <Badge
+                    key={type}
+                    variant="outline"
+                    className="gap-1.5 text-xs"
+                  >
+                    {Icon && <Icon className="h-3 w-3" />}
+                    <span className="font-mono">{type}</span>
+                    <span className="text-muted-foreground">×{count}</span>
+                  </Badge>
+                );
+              })}
+          </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

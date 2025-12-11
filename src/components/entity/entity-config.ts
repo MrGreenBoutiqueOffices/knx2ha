@@ -104,8 +104,9 @@ export function applyEntityOverride<D extends EntityDomain>(
   domain: D,
   key: string,
   base: DomainEntityMap[D],
-  overrides: EntityOverrides
+  overrides?: EntityOverrides
 ) {
+  if (!overrides) return base;
   const override = overrides[key];
   if (!override) return base;
 

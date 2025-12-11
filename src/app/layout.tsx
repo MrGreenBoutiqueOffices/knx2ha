@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import ThemeProvider from "@/components/theme-provider";
 import VersionTag from "@/components/VersionTag";
+import { Navigation } from "@/components/Navigation";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KNX → HA",
-  description: "Client-side KNX parser",
+  title: "KNX2HA - Convert KNX to Home Assistant",
+  description: "Professional KNX to Home Assistant converter. Transform your KNX project files into ready-to-use YAML configurations instantly.",
 };
 
 export default function RootLayout({
@@ -29,6 +30,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
+          <Navigation />
           {children}
           <Toaster richColors position="top-right" closeButton />
           <div className="fixed bottom-3 right-3 z-50 opacity-70 hover:opacity-100 transition-opacity hidden sm:block">
