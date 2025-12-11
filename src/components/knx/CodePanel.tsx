@@ -65,6 +65,9 @@ export default function CodePanel({
     return highlightTerm(term);
   }, [searchTerm]);
 
+  const highlightBg = resolvedTheme === "dark" ? "rgba(74,222,128,0.35)" : "rgba(34,197,94,0.22)";
+  const highlightColor = resolvedTheme === "dark" ? "#f8fafc" : "#0f172a";
+
   const extensions = useMemo<Extension[]>(() => {
     const theme = resolvedTheme === "dark" ? githubDark : githubLight;
     const base = EditorView.theme(
@@ -74,8 +77,8 @@ export default function CodePanel({
         ".cm-gutters": { backgroundColor: "transparent", borderRight: "1px solid hsl(var(--border))" },
         ".cm-activeLineGutter": { backgroundColor: "transparent" },
         ".cm-search-highlight": {
-          backgroundColor: "var(--primary, rgba(34,197,94,0.25))",
-          color: "inherit",
+          backgroundColor: highlightBg,
+          color: highlightColor,
           borderRadius: "4px",
         },
       },
@@ -96,7 +99,7 @@ export default function CodePanel({
     ];
     if (searchExtension) ex.push(searchExtension);
     return ex;
-  }, [resolvedTheme, searchExtension, defaultCollapsed]);
+  }, [resolvedTheme, searchExtension, defaultCollapsed, highlightBg, highlightColor]);
 
   if (!mounted) return null;
 
