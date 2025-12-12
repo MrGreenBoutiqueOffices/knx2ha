@@ -28,7 +28,7 @@ export function HeroSection() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
               <Button asChild size="lg" className="px-6 text-base font-semibold shadow-md">
                 <Link href="/tool">
-                  <Play className="mr-2 h-5 w-5" />
+                  <Play className="mr-1 h-5 w-5" />
                   Get started
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
