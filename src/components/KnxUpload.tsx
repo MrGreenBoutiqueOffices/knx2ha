@@ -23,6 +23,7 @@ import { Copy, FileDown, PackageOpen } from "lucide-react";
 
 import { downloadText } from "@/lib/utils/download";
 import { buildSavedConfig, parseSavedConfig, stringifySavedConfig } from "@/lib/utils/config";
+import SnapshotControls from "./knx/SnapshotControls";
 import UploadDropzone from "./knx/UploadDropzone";
 import OptionsBar from "./knx/OptionsBar";
 import ProgressInfo from "./knx/ProgressInfo";
@@ -63,7 +64,6 @@ export default function KnxUpload() {
   const [exportOpen, setExportOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [yamlSearch, setYamlSearch] = useState("");
-
   const projectName = catalog?.meta?.name ?? "Unknown";
 
   const [entityOverrides, setEntityOverrides] = useState<EntityOverrides>({});
@@ -323,7 +323,7 @@ export default function KnxUpload() {
               </div>
               <p className="text-sm text-muted-foreground">Follow the steps: upload, review entities, export YAML.</p>
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-nowrap sm:items-center sm:justify-end">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               <Button
                 variant="outline"
                 onClick={handleReset}
@@ -332,9 +332,15 @@ export default function KnxUpload() {
               >
                 Reset
               </Button>
+              <SnapshotControls
+                busy={busy}
+                hasCatalog={Boolean(catalog)}
+                onImportConfig={handleImportConfig}
+                onExportConfig={handleExportConfig}
+              />
               {catalog && adjustedEntities && (
                 <Button onClick={() => setExportOpen(true)} className="text-sm font-semibold w-full sm:w-auto">
-                  <FileDown className="mr-2 h-4 w-4" />
+                  <FileDown className="h-4 w-4" />
                   Export
                 </Button>
               )}
@@ -361,9 +367,6 @@ export default function KnxUpload() {
                     onToggleReserve={setDropReserveFromUnknown}
                     onParse={handleParse}
                     onReset={handleReset}
-                    onImportConfig={handleImportConfig}
-                    onExportConfig={handleExportConfig}
-                    canExport={Boolean(catalog)}
                   />
                 </div>
               </div>
@@ -417,7 +420,7 @@ export default function KnxUpload() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm">
-                        <Copy className="mr-2 h-3.5 w-3.5" />
+                        <Copy className="mr-1 h-3.5 w-3.5" />
                         Copy
                       </Button>
                     </DropdownMenuTrigger>
@@ -472,7 +475,7 @@ export default function KnxUpload() {
                   </DropdownMenu>
                 )}
                 <Button size="sm" onClick={() => setExportOpen(true)}>
-                  <FileDown className="mr-2 h-3.5 w-3.5" />
+                  <FileDown className="mr-1 h-3.5 w-3.5" />
                   Export
                 </Button>
               </div>
